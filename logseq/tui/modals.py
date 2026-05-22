@@ -99,6 +99,59 @@ class TodosModal(ModalScreen):
             table.add_row(r["page"], r["content"][:200])
 
 
+class RefPicker(ModalScreen):
+    """List all refs on the current page; ↑↓ to navigate, Enter to jump,
+    Esc to cancel. Returns the selected (kind, target, raw) tuple to the
+    push_screen callback (or None on Esc)."""
+
+    BINDINGS = [Binding("escape", "dismiss", "Close")]
+
+    KIND_PREFIX = {
+        "page": "[[",
+        "tag": "#",
+        "block": "((",
+        "embed": "{{",
+    }
+    KIND_STYLES = {
+        "page": "cyan",
+        "tag": "magenta",
+        "block": "yellow",
+        "embed": "yellow",
+    }
+
+    def __init__(self, refs: list[tuple[str, str, str]]) -> None:
+        super().__init__()
+        self._refs = refs
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="ref-modal"):
+            yield Label(
+                f"Refs on this page ({len(self._refs)})  ·  Enter to jump · Esc to close",
+                classes="title",
+            )
+            yield ListView(id="ref-list")
+
+    def on_mount(self) -> None:
+        from rich.text import Text as RText
+
+        lv = self.query_one("#ref-list", ListView)
+        for kind, _target, raw in self._refs:
+            label = RText()
+            label.append(f"{kind:6s} ", style="dim")
+            label.append(raw, style=self.KIND_STYLES.get(kind, ""))
+            lv.append(ListItem(Label(label)))
+        if self._refs:
+            lv.index = 0
+            lv.focus()
+
+    def on_list_view_selected(self, event: ListView.Selected) -> None:
+        idx = event.list_view.index
+        if idx is not None and 0 <= idx < len(self._refs):
+            self.dismiss(self._refs[idx])
+        else:
+            self.dismiss(None)
+
+
 class ThemePicker(ModalScreen):
     BINDINGS = [Binding("escape", "dismiss", "Close")]
 

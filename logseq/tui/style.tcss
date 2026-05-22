@@ -87,3 +87,15 @@ ModalScreen {
 #theme-list {
     height: 1fr;
 }
+
+#ref-modal {
+    width: 80;
+    height: 24;
+    border: thick $accent;
+    background: $surface;
+    padding: 1;
+}
+
+#ref-list {
+    height: 1fr;
+}

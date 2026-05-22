@@ -111,6 +111,9 @@ Bindings (vim-aligned):
 | `?` | open FTS search modal |
 | `D` | jump to today's journal |
 | `J` | toggle journals in list |
+| mouse click `[[X]]` / `((uuid))` / `#tag` in view | jump to that page / block / tag |
+| `r` | open refs picker (keyboard-friendly list of all refs on current page) |
+| `Ctrl+O` | jump back through navigation history (vim-style) |
 | `t` | TODOs modal |
 | `T` | theme picker (live preview) |
 | `Ctrl+R` | refresh list |

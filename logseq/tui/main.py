@@ -18,7 +18,12 @@ from textual.widgets import Footer, Header, Input, ListItem, ListView, Static
 from .. import queries
 from ..parser import parse
 from ..render import render_page
-from .data import PageRef, list_pages
+from .data import (
+    PageRef,
+    list_pages,
+    lookup_page_by_block_uuid,
+    lookup_page_by_name,
+)
 
 
 class MainScreen(Screen):
@@ -37,9 +42,11 @@ class MainScreen(Screen):
         Binding("/", "focus_filter", "Filter", show=True),
         Binding("question_mark", "search_modal", "Search", show=True),
         Binding("escape", "blur_filter", show=False),
-        # Logseq-style jumps
+        # Logseq-style jumps + ref navigation
         Binding("D", "today", "Today", show=True),
         Binding("J", "toggle_journals", "+Journals", show=True),
+        Binding("r", "refs_modal", "Refs", show=True),
+        Binding("ctrl+o", "back", "Back", show=True),
         # app actions
         Binding("t", "todos_modal", "TODOs", show=True),
         Binding("T", "theme_picker", "Theme", show=True),
@@ -62,6 +69,7 @@ class MainScreen(Screen):
         self.all_pages: list[PageRef] = []
         self._render_timer: Timer | None = None
         self._filter_timer: Timer | None = None
+        self._history: list[PageRef] = []
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
@@ -167,7 +175,7 @@ class MainScreen(Screen):
             # broken encodings (caught below)
             text = Path(new.file_path).read_text(encoding="utf-8-sig")
             page = parse(text, new.file_path)
-            view.update(render_page(page))
+            view.update(render_page(page, ref_action=_ref_action))
         except Exception as e:
             error_text = Text()
             error_text.append(f"error: {type(e).__name__}: {e}", style="red")
@@ -304,6 +312,7 @@ class MainScreen(Screen):
         if not path.exists():
             self.notify(f"No journal for {today}", severity="warning")
             return
+        self._push_history()
         self.current = PageRef(
             name=path.stem.lower(),
             title=path.stem,
@@ -316,3 +325,77 @@ class MainScreen(Screen):
             severity="information",
             timeout=1.5,
         )
+
+    # --- ref navigation (mouse-click inline OR `r` modal + Ctrl+O back) ---
+
+    def _push_history(self) -> None:
+        """Record current page on the history stack before a navigation jump."""
+        if self.current is not None:
+            self._history.append(self.current)
+
+    def action_jump_page(self, name: str) -> None:
+        target = lookup_page_by_name(self.vault, name)
+        if target is None:
+            self.notify(f"page not indexed: {name}", severity="warning")
+            return
+        self._push_history()
+        self.current = target
+
+    def action_jump_block(self, uuid: str) -> None:
+        target = lookup_page_by_block_uuid(self.vault, uuid)
+        if target is None:
+            self.notify(f"block not indexed: {uuid}", severity="warning")
+            return
+        self._push_history()
+        self.current = target
+
+    def action_back(self) -> None:
+        if not self._history:
+            self.notify("no history", severity="information", timeout=1.0)
+            return
+        self.current = self._history.pop()
+
+    def action_refs_modal(self) -> None:
+        if self.current is None:
+            return
+        try:
+            text = Path(self.current.file_path).read_text(encoding="utf-8-sig")
+        except OSError as e:
+            self.notify(f"cannot read page file: {e}", severity="error")
+            return
+        page = parse(text, self.current.file_path)
+        seen: set[tuple[str, str]] = set()
+        refs: list[tuple[str, str, str]] = []  # (kind, target, raw)
+        for b in page.blocks:
+            for ref in b.refs:
+                key = (ref.kind, ref.target)
+                if key in seen:
+                    continue
+                seen.add(key)
+                refs.append((ref.kind, ref.target, ref.raw))
+        if not refs:
+            self.notify("no refs on this page", severity="information", timeout=1.0)
+            return
+        from .modals import RefPicker
+
+        def _on_picked(picked: tuple[str, str, str] | None) -> None:
+            if picked is None:
+                return
+            kind, target, _raw = picked
+            if kind in ("page", "tag"):
+                self.action_jump_page(target)
+            elif kind in ("block", "embed"):
+                self.action_jump_block(target)
+
+        self.app.push_screen(RefPicker(refs), _on_picked)
+
+
+def _ref_action(kind: str, target: str) -> str | None:
+    """Build the @click action string for a ref. Page/tag refs jump to the
+    page; block/embed refs jump to the page containing the block."""
+    # repr() handles single-quote escaping for targets containing apostrophes
+    if kind in ("page", "tag"):
+        return f"jump_page({target!r})"
+    if kind in ("block", "embed"):
+        return f"jump_block({target!r})"
+    return None

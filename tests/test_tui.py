@@ -356,6 +356,95 @@ async def test_filter_does_not_reset_cursor_when_current_still_visible(
 
 
 @pytest.mark.asyncio
+async def test_jump_to_page_via_action(indexed_vault: Path) -> None:
+    """action_jump_page resolves a [[name]] and switches current page."""
+    app = LogseqTUI(indexed_vault)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen: MainScreen = app.screen  # type: ignore[assignment]
+        # Start at Alpha (alphabetical first page); jump to Beta via ref click action
+        starting = screen.current
+        assert starting is not None
+        screen.action_jump_page("Beta")
+        await pilot.pause()
+        assert screen.current is not None
+        assert screen.current.name == "beta"
+
+
+@pytest.mark.asyncio
+async def test_jump_to_block_via_action(indexed_vault: Path) -> None:
+    """action_jump_block resolves a ((uuid)) to the page that contains it."""
+    import sqlite3
+
+    from logseq.index import db_path_for
+
+    app = LogseqTUI(indexed_vault)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen: MainScreen = app.screen  # type: ignore[assignment]
+        # Pick any block uuid from Alpha (which has 2 blocks)
+        conn = sqlite3.connect(db_path_for(indexed_vault))
+        row = conn.execute(
+            "SELECT uuid, page FROM blocks WHERE page='alpha' LIMIT 1"
+        ).fetchone()
+        conn.close()
+        assert row is not None
+        uuid, page = row
+        screen.action_jump_block(uuid)
+        await pilot.pause()
+        assert screen.current is not None
+        assert screen.current.name == page
+
+
+@pytest.mark.asyncio
+async def test_ctrl_o_jumps_back_through_history(indexed_vault: Path) -> None:
+    app = LogseqTUI(indexed_vault)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen: MainScreen = app.screen  # type: ignore[assignment]
+        started_at = screen.current
+        assert started_at is not None
+        screen.action_jump_page("Beta")
+        await pilot.pause()
+        assert screen.current.name == "beta"
+        # Ctrl+O should restore started_at
+        await pilot.press("ctrl+o")
+        await pilot.pause()
+        assert screen.current.name == started_at.name
+
+
+@pytest.mark.asyncio
+async def test_jump_to_unindexed_page_notifies(indexed_vault: Path) -> None:
+    app = LogseqTUI(indexed_vault)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen: MainScreen = app.screen  # type: ignore[assignment]
+        before = screen.current
+        screen.action_jump_page("NonexistentPage12345")
+        await pilot.pause()
+        # current should NOT change for an unresolvable ref
+        assert screen.current is before
+
+
+@pytest.mark.asyncio
+async def test_r_opens_ref_picker(indexed_vault: Path) -> None:
+    """Pressing `r` on a page with refs opens the RefPicker modal."""
+    from logseq.tui.modals import RefPicker
+
+    app = LogseqTUI(indexed_vault)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen: MainScreen = app.screen  # type: ignore[assignment]
+        # Alpha contains "[[Beta]]" — one page-ref
+        alpha = next(p for p in screen.all_pages if p.title == "Alpha")
+        screen.current = alpha
+        await pilot.pause(0.15)
+        await pilot.press("r")
+        await pilot.pause()
+        assert isinstance(app.screen, RefPicker)
+
+
+@pytest.mark.asyncio
 async def test_view_panel_is_scrollable_for_long_content(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

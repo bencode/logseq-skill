@@ -26,6 +26,26 @@ If exactly one matches, use it. If multiple, ask the user which. If none, ask th
 
 Remember the path within the conversation — don't re-detect for every call.
 
+## 1.5. Keep the index fresh before DB-backed queries
+
+The user usually edits in Logseq desktop while we work. Our index does
+NOT auto-update — Logseq's writes don't notify us. **Before any
+DB-backed query (`search`, `backlinks`, `todos`, `stats`), run
+`logseq index <vault>` once.** It's incremental (~10-50ms when nothing
+changed; ~1.3s on first build of a ~1000-file vault), so the cost is
+invisible to the user but guarantees their latest edits are visible.
+
+Skip this for commands that read files directly: `view`, `parse`,
+`page`, `journal`, `find-page`. They bypass the index entirely.
+
+For commands that write (`capture`, `append`), reindex runs
+automatically post-write — no manual call needed.
+
+Rough rule:
+- Need fresh DB? → reindex first
+- Reading a file directly? → no reindex
+- Writing? → already handled
+
 ## 2. Atomic commands
 
 All commands print JSON to stdout unless noted.

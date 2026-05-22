@@ -23,6 +23,14 @@ def search(
     snippet: bool = False,
     min_len: int = 0,
 ) -> list[dict]:
+    from .tokenize import tokenize_query
+
+    # Jieba-tokenize the user's query so it matches the jieba-tokenized
+    # index. Without this, "数学" wouldn't match index token "数学" when
+    # the user typed it as part of a longer Chinese run.
+    fts_query = tokenize_query(query)
+    if not fts_query.strip():
+        return []
     if snippet:
         sel = (
             "b.page, b.uuid, b.content, "
@@ -38,7 +46,7 @@ def search(
             f"WHERE blocks_fts MATCH ? AND LENGTH(b.content) >= ? "
             f"ORDER BY bm25(blocks_fts) "
             f"LIMIT ?",
-            (query, min_len, limit),
+            (fts_query, min_len, limit),
         ).fetchall()
     if snippet:
         return [

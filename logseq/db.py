@@ -6,7 +6,9 @@ from pathlib import Path
 
 from .model import Block, Page
 
-SCHEMA_VERSION = "1"
+# v2: tokenized_content column + FTS5 now indexes jieba-tokenized text
+#     (fixes CJK false positives like 学生→数学生活)
+SCHEMA_VERSION = "2"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (
@@ -37,6 +39,7 @@ CREATE TABLE IF NOT EXISTS blocks (
     depth INTEGER NOT NULL,
     marker TEXT,
     content TEXT NOT NULL,
+    tokenized_content TEXT NOT NULL DEFAULT '',
     properties_json TEXT NOT NULL,
     has_explicit_id INTEGER NOT NULL,
     line_start INTEGER NOT NULL,
@@ -56,20 +59,25 @@ CREATE TABLE IF NOT EXISTS refs (
 CREATE INDEX IF NOT EXISTS idx_refs_target ON refs(target, kind);
 CREATE INDEX IF NOT EXISTS idx_refs_block ON refs(block_uuid);
 
+-- FTS5 indexes tokenized_content (jieba-segmented) so CJK words become
+-- discrete tokens. unicode61 then splits on the inserted spaces.
+-- snippet() will show jieba-segmented text with visible spaces — slightly
+-- ugly but functional; result display still uses blocks.content directly.
 CREATE VIRTUAL TABLE IF NOT EXISTS blocks_fts USING fts5(
-    content,
+    tokenized_content,
     content='blocks',
     content_rowid='rowid',
     tokenize='unicode61'
 );
 
 CREATE TRIGGER IF NOT EXISTS blocks_ai AFTER INSERT ON blocks BEGIN
-    INSERT INTO blocks_fts(rowid, content) VALUES (new.rowid, new.content);
+    INSERT INTO blocks_fts(rowid, tokenized_content)
+        VALUES (new.rowid, new.tokenized_content);
 END;
 
 CREATE TRIGGER IF NOT EXISTS blocks_ad AFTER DELETE ON blocks BEGIN
-    INSERT INTO blocks_fts(blocks_fts, rowid, content)
-        VALUES('delete', old.rowid, old.content);
+    INSERT INTO blocks_fts(blocks_fts, rowid, tokenized_content)
+        VALUES('delete', old.rowid, old.tokenized_content);
 END;
 """
 
@@ -119,11 +127,14 @@ def insert_page(
 
 
 def insert_block(conn: sqlite3.Connection, block: Block) -> None:
+    from .tokenize import tokenize_for_index
+
     conn.execute(
         "INSERT INTO blocks "
         "(uuid, page, parent_uuid, sibling_order, depth, marker, content, "
-        " properties_json, has_explicit_id, line_start, line_end) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        " tokenized_content, properties_json, has_explicit_id, "
+        " line_start, line_end) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             block.uuid,
             block.page,
@@ -132,6 +143,7 @@ def insert_block(conn: sqlite3.Connection, block: Block) -> None:
             block.depth,
             block.marker,
             block.content,
+            tokenize_for_index(block.content),
             json.dumps(block.properties, ensure_ascii=False),
             int(block.has_explicit_id),
             block.line_start,

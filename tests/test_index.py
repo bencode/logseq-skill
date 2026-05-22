@@ -114,8 +114,10 @@ def test_fts_search_works(vault: Path, db_path: Path) -> None:
     reindex(vault, db_path=db_path)
 
     conn = _connect(db_path)
+    # FTS5 column renamed to tokenized_content as of SCHEMA_VERSION=2
+    # (CJK-aware jieba tokenization layer).
     hits = conn.execute(
-        "SELECT content FROM blocks_fts WHERE blocks_fts MATCH 'feynman'"
+        "SELECT tokenized_content FROM blocks_fts WHERE blocks_fts MATCH 'feynman'"
     ).fetchall()
     assert len(hits) == 1
     assert "feynman" in hits[0][0]
@@ -149,7 +151,7 @@ def test_stats_reports_counts(vault: Path, db_path: Path) -> None:
     assert s["db_exists"] is True
     assert s["pages"] == 1 and s["blocks"] == 1 and s["refs"] == 1
     assert s["db_size_bytes"] > 0
-    assert s["schema_version"] == "1"
+    assert s["schema_version"] == "2"
     assert s["last_index_ts"] is not None
 
 
@@ -302,8 +304,8 @@ def test_stats_reports_schema_outdated_flag(
 
     s1 = stats(vault, db_path=db_path)
     assert s1["valid"] is True
-    assert s1["schema_version"] == "1"
-    assert s1["expected_schema_version"] == "1"
+    assert s1["schema_version"] == "2"
+    assert s1["expected_schema_version"] == "2"
     assert s1["schema_outdated"] is False
 
     raw = sqlite3.connect(db_path)

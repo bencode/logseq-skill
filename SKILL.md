@@ -1,7 +1,7 @@
 ---
 name: logseq-skill
-description: Atomic read primitives over a Logseq directory. Parse a single .md file, find page files by name, fetch a journal by date. CLI outputs structured JSON; the model composes calls. Trigger when the user mentions "logseq", "today's journal" / "今天日志", "find X notes" / "找 X 笔记", "in my notes" / "在我笔记里", or asks about content after they've /add-dir'd a directory containing logseq/config.edn. This skill is read-only — no rendering, no writes, no full-text index (those are future stages).
-allowed-tools: Bash, Read
+description: LLM-powered query layer for Logseq vaults. SQLite + FTS5 + jieba CJK tokenizer for sub-millisecond cross-vault search, backlinks, and TODO aggregation that Logseq desktop can't deliver at scale. Atomic file primitives (parse / page / journal / find-page) plus DB-backed queries (index / stats / search / backlinks / todos). All results are formatted as `logseq://` URLs so Cmd+Click opens the matching page directly in Logseq desktop. Trigger when the user mentions "logseq", "today's journal" / "今天日志", "find X notes" / "找 X 笔记", "in my notes" / "在我笔记里", searches for content, asks about TODOs/backlinks, or references a /add-dir'd directory containing logseq/config.edn. Writes go through Claude's Read/Edit tools directly on the .md files, not through this CLI.
+allowed-tools: Bash, Read, Edit, Glob, Grep
 ---
 
 # logseq-skill

@@ -6,6 +6,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
 from textual.screen import ModalScreen
+from textual.timer import Timer
 from textual.widgets import DataTable, Input, Label, ListItem, ListView, Select
 
 from .. import queries
@@ -14,14 +15,17 @@ from .. import queries
 class SearchModal(ModalScreen):
     BINDINGS = [Binding("escape", "dismiss", "Close")]
 
+    QUERY_DEBOUNCE = 0.2
+
     def __init__(self, vault: Path) -> None:
         super().__init__()
         self.vault = vault
+        self._query_timer: Timer | None = None
 
     def compose(self) -> ComposeResult:
         with Vertical(id="search-modal"):
             yield Label("FTS5 search  (Esc to close)", classes="title")
-            yield Input(placeholder="query...  (use --min-len via SHIFT+M)", id="search-input")
+            yield Input(placeholder="query...", id="search-input")
             yield DataTable(id="search-results", cursor_type="row")
 
     def on_mount(self) -> None:
@@ -32,9 +36,17 @@ class SearchModal(ModalScreen):
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id != "search-input":
             return
+        value = event.value
+        if self._query_timer is not None:
+            self._query_timer.stop()
+        self._query_timer = self.set_timer(
+            self.QUERY_DEBOUNCE, lambda: self._run_search(value)
+        )
+
+    def _run_search(self, q: str) -> None:
         table = self.query_one("#search-results", DataTable)
         table.clear()
-        q = event.value.strip()
+        q = q.strip()
         if len(q) < 2:
             return
         try:

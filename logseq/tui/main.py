@@ -13,6 +13,7 @@ from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.reactive import reactive
 from textual.screen import Screen
+from textual.timer import Timer
 from textual.widgets import Footer, Header, Input, Label, ListItem, ListView, Static
 
 from .. import queries
@@ -94,10 +95,16 @@ class MainScreen(Screen):
 
     _g_pending_at: float = 0.0
 
+    # debounce windows (seconds)
+    RENDER_DEBOUNCE = 0.08
+    FILTER_DEBOUNCE = 0.15
+
     def __init__(self, vault: Path) -> None:
         super().__init__()
         self.vault = vault
         self.all_pages: list[PageRef] = []
+        self._render_timer: Timer | None = None
+        self._filter_timer: Timer | None = None
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
@@ -134,7 +141,16 @@ class MainScreen(Screen):
 
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id == "page-filter":
-            self.filter_text = event.value
+            value = event.value
+            if self._filter_timer is not None:
+                self._filter_timer.stop()
+            self._filter_timer = self.set_timer(
+                self.FILTER_DEBOUNCE,
+                lambda: self._apply_filter(value),
+            )
+
+    def _apply_filter(self, value: str) -> None:
+        self.filter_text = value
 
     def watch_filter_text(self, value: str) -> None:
         if not value:
@@ -160,7 +176,18 @@ class MainScreen(Screen):
         needle = self.filter_text.lower()
         return [p for p in self.all_pages if needle in p.title.lower()]
 
-    def watch_current(self, _old: PageRef | None, new: PageRef | None) -> None:
+    def watch_current(self, _old: PageRef | None, _new: PageRef | None) -> None:
+        """Schedule a debounced render — cursor highlight stays instant,
+        the heavy file-read/parse/render/backlinks work happens only after
+        keystrokes settle for RENDER_DEBOUNCE seconds."""
+        if self._render_timer is not None:
+            self._render_timer.stop()
+        self._render_timer = self.set_timer(
+            self.RENDER_DEBOUNCE, self._do_render_current
+        )
+
+    def _do_render_current(self) -> None:
+        new = self.current
         view = self.query_one("#view-panel", Static)
         bl = self.query_one("#backlinks-panel", Static)
         if new is None:

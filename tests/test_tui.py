@@ -95,10 +95,10 @@ async def test_view_updates_when_current_changes(indexed_vault: Path) -> None:
         screen: MainScreen = app.screen  # type: ignore[assignment]
         beta = next(p for p in screen.all_pages if p.title == "Beta")
         screen.current = beta
-        await pilot.pause()
+        # Wait > RENDER_DEBOUNCE (80ms) for the debounced render to fire
+        await pilot.pause(0.15)
         view = screen.query_one("#view-panel", Static)
         rendered = view.renderable
-        # Static.renderable may be a str or RenderableType; convert to str
         from io import StringIO
 
         from rich.console import Console
@@ -108,6 +108,64 @@ async def test_view_updates_when_current_changes(indexed_vault: Path) -> None:
         txt = console.file.getvalue()
         assert "Beta" in txt
         assert "beta details" in txt
+
+
+@pytest.mark.asyncio
+async def test_render_is_debounced_on_rapid_current_changes(
+    indexed_vault: Path,
+) -> None:
+    """Rapid current changes coalesce — only the final value renders, not all."""
+    app = LogseqTUI(indexed_vault)
+    async with app.run_test() as pilot:
+        # Let initial mount + first render settle
+        await pilot.pause(0.2)
+        screen: MainScreen = app.screen  # type: ignore[assignment]
+
+        render_calls: list[str | None] = []
+        original = screen._do_render_current
+
+        def counting_render() -> None:
+            render_calls.append(screen.current.title if screen.current else None)
+            original()
+
+        screen._do_render_current = counting_render  # type: ignore[method-assign]
+
+        # Tight loop: change current 3 times with no await in between
+        pages = screen.all_pages
+        assert len(pages) >= 2
+        screen.current = pages[0]
+        screen.current = pages[1]
+        screen.current = pages[-1]
+        # Immediately: no render fired (timer pending, will fire in 80ms)
+        assert render_calls == [], f"render fired early: {render_calls}"
+
+        # After > RENDER_DEBOUNCE settles, exactly ONE render fires for the
+        # final value (coalesced)
+        await pilot.pause(0.15)
+        assert render_calls == [pages[-1].title], (
+            f"expected 1 render of final page, got {render_calls}"
+        )
+
+
+@pytest.mark.asyncio
+async def test_filter_is_debounced(indexed_vault: Path) -> None:
+    app = LogseqTUI(indexed_vault)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen: MainScreen = app.screen  # type: ignore[assignment]
+        filter_input = screen.query_one("#page-filter")
+        filter_input.focus()
+        await pilot.pause()
+
+        # Type chars; filter_text should NOT update synchronously
+        await pilot.press("b", "e", "t", "a")
+        assert screen.filter_text == "", (
+            f"filter applied before debounce: {screen.filter_text!r}"
+        )
+
+        # After > FILTER_DEBOUNCE settles, filter applies once
+        await pilot.pause(0.2)
+        assert screen.filter_text == "beta"
 
 
 @pytest.mark.asyncio

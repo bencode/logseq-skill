@@ -130,13 +130,14 @@ def _cmd_index(vault: str, full: bool) -> int:
         "reindexed": result.reindexed,
         "deleted": result.deleted,
         "errors": result.errors,
+        "auto_rebuilt": result.auto_rebuilt,
         "elapsed_ms": result.elapsed_ms,
     })
     return 0
 
 
 def _cmd_stats(vault: str) -> int:
-    from .index import stats
+    from .stats import stats
     try:
         _emit_json(stats(Path(vault)))
     except ValueError as e:

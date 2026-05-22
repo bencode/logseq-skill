@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import os
 import sqlite3
+import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -10,7 +11,6 @@ from pathlib import Path
 from .db import (
     SCHEMA_VERSION,
     connect,
-    count,
     existing_files,
     insert_page,
 )
@@ -27,6 +27,7 @@ class IndexStats:
     deleted: int
     elapsed_ms: int
     errors: int = 0
+    auto_rebuilt: bool = False
 
 
 def db_path_for(vault_dir: Path) -> Path:
@@ -44,6 +45,10 @@ def reindex(
     _validate_vault(vault_dir)
     started = time.monotonic()
     target_db = db_path or db_path_for(vault_dir)
+    auto_rebuilt = False
+    if not full and target_db.exists() and _needs_rebuild(target_db):
+        full = True
+        auto_rebuilt = True
     working_db = (
         target_db.with_name(target_db.name + ".tmp") if full else target_db
     )
@@ -64,36 +69,39 @@ def reindex(
         conn.close()
     if full and working_db != target_db:
         os.replace(working_db, target_db)
+        for sidecar in ("-wal", "-shm"):
+            working_db.with_name(working_db.name + sidecar).unlink(missing_ok=True)
     elapsed_ms = int((time.monotonic() - started) * 1000)
-    return IndexStats(scanned, skipped, reindexed, deleted, elapsed_ms, errors)
+    return IndexStats(
+        scanned, skipped, reindexed, deleted, elapsed_ms, errors, auto_rebuilt
+    )
 
 
-def stats(vault_dir: Path, *, db_path: Path | None = None) -> dict:
-    vault_dir = vault_dir.expanduser().resolve()
-    _validate_vault(vault_dir)
-    resolved_db = db_path or db_path_for(vault_dir)
-    if not resolved_db.exists():
-        return _empty_stats(vault_dir, resolved_db)
-    conn = sqlite3.connect(resolved_db)
+def _needs_rebuild(db_path: Path) -> bool:
     try:
-        pages = count(conn, "pages")
-        blocks = count(conn, "blocks")
-        refs = count(conn, "refs")
-        meta = dict(conn.execute("SELECT key, value FROM meta").fetchall())
-    finally:
-        conn.close()
-    last_ts = meta.get("last_index_ts")
-    return {
-        "db_path": str(resolved_db),
-        "db_exists": True,
-        "pages": pages,
-        "blocks": blocks,
-        "refs": refs,
-        "db_size_bytes": resolved_db.stat().st_size,
-        "last_index_ts": float(last_ts) if last_ts else None,
-        "vault_path": meta.get("vault_path"),
-        "schema_version": meta.get("schema_version"),
-    }
+        conn = sqlite3.connect(db_path)
+        try:
+            row = conn.execute(
+                "SELECT value FROM meta WHERE key = 'schema_version'"
+            ).fetchone()
+        finally:
+            conn.close()
+    except sqlite3.DatabaseError as e:
+        _warn(f"cache DB unreadable ({type(e).__name__}: {e}); will rebuild from vault")
+        return True
+    if row is None:
+        return False
+    if row[0] != SCHEMA_VERSION:
+        _warn(
+            f"cache DB schema_version={row[0]!r}, current={SCHEMA_VERSION!r}; "
+            f"will rebuild from vault"
+        )
+        return True
+    return False
+
+
+def _warn(msg: str) -> None:
+    print(f"warn: {msg}", file=sys.stderr)
 
 
 def _validate_vault(vault_dir: Path) -> None:
@@ -125,7 +133,8 @@ def _do_reindex(conn: sqlite3.Connection, vault_dir: Path) -> tuple[int, int, in
             continue
         try:
             page = parse(md.read_text(encoding="utf-8"), file_path)
-        except (UnicodeDecodeError, ValueError):
+        except (UnicodeDecodeError, ValueError) as e:
+            _warn(f"skipping {file_path}: {type(e).__name__}: {e}")
             errors += 1
             continue
         old_uuids = {
@@ -134,8 +143,18 @@ def _do_reindex(conn: sqlite3.Connection, vault_dir: Path) -> tuple[int, int, in
             )
         }
         db_uuids -= old_uuids
-        page.blocks, dup_count = _filter_duplicate_uuids(page.blocks, db_uuids)
-        errors += dup_count
+        unique_blocks = []
+        for b in page.blocks:
+            if b.uuid in db_uuids:
+                _warn(
+                    f"duplicate block uuid {b.uuid} in {file_path}; "
+                    f"already indexed from another file, skipping this occurrence"
+                )
+                errors += 1
+                continue
+            unique_blocks.append(b)
+            db_uuids.add(b.uuid)
+        page.blocks = unique_blocks
         conn.execute("DELETE FROM pages WHERE file_path = ?", (file_path,))
         insert_page(conn, page, stat.st_mtime, stat.st_size)
         reindexed += 1
@@ -143,22 +162,12 @@ def _do_reindex(conn: sqlite3.Connection, vault_dir: Path) -> tuple[int, int, in
     return scanned, skipped, reindexed, deleted, errors
 
 
-def _filter_duplicate_uuids(blocks, known_uuids):
-    kept = []
-    dup = 0
-    for b in blocks:
-        if b.uuid in known_uuids:
-            dup += 1
-            continue
-        kept.append(b)
-        known_uuids.add(b.uuid)
-    return kept, dup
-
-
 def _delete_missing(conn: sqlite3.Connection, missing: set[str]) -> int:
+    deleted = 0
     for fp in missing:
-        conn.execute("DELETE FROM pages WHERE file_path = ?", (fp,))
-    return len(missing)
+        cur = conn.execute("DELETE FROM pages WHERE file_path = ?", (fp,))
+        deleted += cur.rowcount
+    return deleted
 
 
 def _write_meta(conn: sqlite3.Connection, vault_dir: Path) -> None:
@@ -172,15 +181,3 @@ def _write_meta(conn: sqlite3.Connection, vault_dir: Path) -> None:
     )
 
 
-def _empty_stats(vault_dir: Path, db_path: Path) -> dict:
-    return {
-        "db_path": str(db_path),
-        "db_exists": False,
-        "pages": 0,
-        "blocks": 0,
-        "refs": 0,
-        "db_size_bytes": 0,
-        "last_index_ts": None,
-        "vault_path": str(vault_dir),
-        "schema_version": None,
-    }

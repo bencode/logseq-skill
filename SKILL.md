@@ -55,10 +55,21 @@ Build or refresh the SQLite index for a vault (vault = directory with `logseq/co
 - `--full` wipes the DB and rebuilds from scratch atomically (writes to `<db>.tmp`, swaps on success)
 - Vault path is canonicalized (`expanduser().resolve()`) — same vault via relative, absolute, symlinked, or `..`-laden spelling all hit the same DB
 - DB path: `~/.cache/logseq-skill/<sha1(canonical_vault_path)[:16]>.db`
-- Output: JSON `{scanned, skipped, reindexed, deleted, errors, elapsed_ms}`
-- `errors` counts files that failed to parse (non-UTF-8 etc.) plus blocks skipped due to cross-file `id::` duplication. Non-zero `errors` does not abort the run — surviving files/blocks are indexed
+- Output: JSON `{scanned, skipped, reindexed, deleted, errors, auto_rebuilt, elapsed_ms}`
+- `errors` counts files that failed to parse (non-UTF-8 etc.) plus blocks skipped due to cross-file `id::` duplication. Non-zero `errors` does not abort the run — surviving files/blocks are indexed; per-occurrence details are logged to stderr (`warn: ...` lines)
+- `auto_rebuilt: true` means the index was silently rebuilt from scratch because the existing cache DB was corrupt or had a stale schema version (see "Confirm before rebuild" below)
 - Exit code 2 with stderr message if `<vault>` is not a Logseq vault
 - Real-world: ~1300ms for 1100 files full / ~25ms when nothing changed
+
+### Confirm before rebuild
+
+The cache DB is purely derived (vault is the source of truth), so a rebuild loses no data and costs only ~1.3s of local CPU — no LLM/API spend. Still, before triggering anything that may rebuild, **first call `logseq stats <vault>` and inspect the result**:
+
+- `valid: false` → DB file is corrupt. Tell the user, ask permission, then `logseq index <vault>` (which will auto-rebuild).
+- `schema_outdated: true` → DB was written by an older skill version. Tell the user "the index format changed in this version, need to rebuild from the vault (~1.3s, no data loss)", ask permission, then `logseq index <vault>`.
+- `valid: true, schema_outdated: false` → safe to use the index directly or do an incremental refresh.
+
+`logseq index` will still auto-rebuild on corrupt/mismatched DB even if you don't pre-check, but you'll surprise the user with a 1.3s run instead of a 25ms incremental. Pre-checking + asking is the polite path.
 
 ### `logseq stats <vault>`
 Show index status without rebuilding. Output: JSON `{db_path, db_exists, pages, blocks, refs, db_size_bytes, last_index_ts, vault_path, schema_version}`.

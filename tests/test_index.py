@@ -7,7 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from logseq.index import db_path_for, reindex, stats
+from logseq.index import db_path_for, reindex
+from logseq.stats import stats
 
 
 @pytest.fixture
@@ -229,6 +230,123 @@ def test_unicode_decode_error_skips_only_bad_file(
     pages = {row[0] for row in conn.execute("SELECT name FROM pages")}
     assert "good" in pages
     assert "bad" not in pages
+
+
+def test_connect_enables_wal_and_busy_timeout(db_path: Path) -> None:
+    from logseq.db import connect
+
+    conn = connect(db_path)
+    try:
+        mode = conn.execute("PRAGMA journal_mode").fetchone()[0]
+        timeout = conn.execute("PRAGMA busy_timeout").fetchone()[0]
+    finally:
+        conn.close()
+    assert mode == "wal"
+    assert timeout == 5000
+
+
+def test_reindex_auto_rebuilds_on_schema_mismatch(
+    vault: Path, db_path: Path, capfd: pytest.CaptureFixture[str]
+) -> None:
+    (vault / "pages" / "A.md").write_text("- alpha\n", encoding="utf-8")
+    reindex(vault, db_path=db_path)
+
+    raw = sqlite3.connect(db_path)
+    raw.execute("UPDATE meta SET value='99' WHERE key='schema_version'")
+    raw.commit()
+    raw.close()
+
+    capfd.readouterr()  # clear prior output
+    result = reindex(vault, db_path=db_path)
+    err = capfd.readouterr().err
+
+    assert result.auto_rebuilt is True
+    assert result.reindexed == 1 and result.skipped == 0
+    assert "schema_version='99'" in err and "rebuild" in err
+
+
+def test_reindex_auto_rebuilds_on_corrupt_db(
+    vault: Path, db_path: Path, capfd: pytest.CaptureFixture[str]
+) -> None:
+    (vault / "pages" / "A.md").write_text("- alpha\n", encoding="utf-8")
+    reindex(vault, db_path=db_path)
+
+    db_path.write_bytes(b"this is not a sqlite file")
+
+    capfd.readouterr()
+    result = reindex(vault, db_path=db_path)
+    err = capfd.readouterr().err
+
+    assert result.auto_rebuilt is True
+    assert result.reindexed == 1
+    assert "unreadable" in err and "rebuild" in err
+
+
+def test_stats_returns_broken_shape_on_corrupt_db(
+    vault: Path, db_path: Path
+) -> None:
+    db_path.write_bytes(b"\x00\x01garbage\xff\xfe")
+    s = stats(vault, db_path=db_path)
+    assert s["db_exists"] is True
+    assert s["valid"] is False
+    assert "error" in s and s["error"]
+    # corruption was NOT silently auto-fixed by stats (file still garbage)
+    assert db_path.read_bytes().startswith(b"\x00\x01garbage")
+
+
+def test_stats_reports_schema_outdated_flag(
+    vault: Path, db_path: Path
+) -> None:
+    (vault / "pages" / "A.md").write_text("- a\n", encoding="utf-8")
+    reindex(vault, db_path=db_path)
+
+    s1 = stats(vault, db_path=db_path)
+    assert s1["valid"] is True
+    assert s1["schema_version"] == "1"
+    assert s1["expected_schema_version"] == "1"
+    assert s1["schema_outdated"] is False
+
+    raw = sqlite3.connect(db_path)
+    raw.execute("UPDATE meta SET value='99' WHERE key='schema_version'")
+    raw.commit()
+    raw.close()
+
+    s2 = stats(vault, db_path=db_path)
+    assert s2["schema_version"] == "99"
+    assert s2["schema_outdated"] is True
+
+
+def test_delete_missing_counts_actual_rowcount(
+    vault: Path, db_path: Path
+) -> None:
+    from logseq.index import _delete_missing
+
+    (vault / "pages" / "A.md").write_text("- a\n", encoding="utf-8")
+    reindex(vault, db_path=db_path)
+
+    conn = sqlite3.connect(db_path)
+    try:
+        deleted = _delete_missing(
+            conn, {"/phantom1.md", "/phantom2.md", "/phantom3.md"}
+        )
+    finally:
+        conn.close()
+    assert deleted == 0
+
+
+def test_full_rebuild_cleans_up_wal_sidecars(
+    vault: Path, db_path: Path
+) -> None:
+    (vault / "pages" / "A.md").write_text("- a\n", encoding="utf-8")
+    reindex(vault, db_path=db_path, full=True)
+
+    leftover = [
+        db_path.with_name(db_path.name + ".tmp"),
+        db_path.with_name(db_path.name + ".tmp-wal"),
+        db_path.with_name(db_path.name + ".tmp-shm"),
+    ]
+    for p in leftover:
+        assert not p.exists(), f"leaked tmp sidecar: {p}"
 
 
 def test_full_rebuild_preserves_old_db_on_parse_failure(

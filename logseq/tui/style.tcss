@@ -21,13 +21,14 @@ Screen {
 }
 
 #view-scroll {
-    height: 2fr;
+    height: 1fr;
     border: round $accent;
     padding: 0 1;
 }
 
 #backlinks-scroll {
-    height: 1fr;
+    height: auto;
+    max-height: 12;
     border: round $accent;
     padding: 0 1;
 }

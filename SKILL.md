@@ -8,6 +8,12 @@ allowed-tools: Bash, Read
 
 A small CLI of atomic Logseq operations. You (Claude) compose them in response to user requests; no scenario is hardwired.
 
+## CLI invocation
+
+Throughout this skill, `logseq` refers to the absolute path
+`~/.claude/skills/logseq-skill/.venv/bin/logseq`. Use that absolute path
+when running Bash commands — the venv binary is not on global PATH.
+
 ## 1. Find a Logseq directory
 
 A Logseq directory is one that contains `logseq/config.edn`. Check the user's working directories (the ones they `/add-dir`'d):
@@ -22,7 +28,7 @@ Remember the path within the conversation — don't re-detect for every call.
 
 ## 2. Atomic commands
 
-The `logseq` CLI is installed via this skill's venv (`logseq.cli:main`). All commands print JSON to stdout unless noted.
+All commands print JSON to stdout unless noted.
 
 ### `logseq parse <file>`
 Parse any `.md` file into `{page, blocks[]}`. Use when you already know the file path.

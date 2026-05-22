@@ -6,25 +6,37 @@ Atomic primitives: `parse` / `page` / `journal` / `find-page`. The LLM composes 
 
 ## Install
 
-```bash
-# 1. Clone (anywhere you like)
-git clone git@github.com:bencode/logseq-skill.git ~/work/logseq-skill
-cd ~/work/logseq-skill
+The canonical Claude Code skill location is `~/.claude/skills/<name>/`. Clone directly there:
 
-# 2. Create venv & install
+```bash
+git clone git@github.com:bencode/logseq-skill.git ~/.claude/skills/logseq-skill
+cd ~/.claude/skills/logseq-skill
 uv venv
 uv pip install -e ".[dev]"
-
-# 3. Symlink to Claude Code's skills directory
-ln -s "$(pwd)" ~/.claude/skills/logseq-skill
 ```
+
+Open a new Claude Code session and the skill becomes available — Claude will detect `~/.claude/skills/logseq-skill/SKILL.md` and follow its instructions.
 
 ## Verify
 
 ```bash
-.venv/bin/logseq parse tests/fixtures/simple.md
+~/.claude/skills/logseq-skill/.venv/bin/logseq parse \
+  ~/.claude/skills/logseq-skill/tests/fixtures/simple.md
 # should print {"page": ..., "blocks": [...]}
 ```
+
+## Development
+
+To hack on the skill itself, clone anywhere and symlink:
+
+```bash
+git clone git@github.com:bencode/logseq-skill.git ~/work/logseq-skill
+cd ~/work/logseq-skill
+uv venv && uv pip install -e ".[dev]"
+ln -s "$(pwd)" ~/.claude/skills/logseq-skill
+```
+
+This keeps the dev tree separate from the "installed" skill location. (`~/.claude/skills/` officially expects a real directory; symlinking works in practice but isn't documented.)
 
 ## Use in Claude Code
 
@@ -64,6 +76,7 @@ Read-only MVP. Future stages: SQLite index, full-text search, backlinks, write c
 ## Uninstall
 
 ```bash
-rm ~/.claude/skills/logseq-skill   # the symlink
-rm -rf ~/work/logseq-skill         # the actual repo
+rm -rf ~/.claude/skills/logseq-skill
 ```
+
+(If you used the Development setup, also `rm -rf ~/work/logseq-skill`.)

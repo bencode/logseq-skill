@@ -106,7 +106,7 @@ Bindings (vim-aligned):
 | `gg` / `G` | top / bottom |
 | `Ctrl+d` / `Ctrl+u` | half-page |
 | `Ctrl+f` / `Ctrl+b` | full-page |
-| `h` / `l` | focus list / view pane |
+| `h` / `l` | focus list / view pane (when view focused: arrow keys / PgUp/PgDn / mouse wheel scroll long pages) |
 | `/` | focus filter input |
 | `?` | open FTS search modal |
 | `D` | jump to today's journal |

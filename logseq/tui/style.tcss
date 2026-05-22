@@ -20,18 +20,20 @@ Screen {
     height: 1fr;
 }
 
-#view-panel {
+#view-scroll {
     height: 2fr;
     border: round $accent;
     padding: 0 1;
-    overflow-y: auto;
 }
 
-#backlinks-panel {
+#backlinks-scroll {
     height: 1fr;
     border: round $accent;
     padding: 0 1;
-    overflow-y: auto;
+}
+
+#view-panel, #backlinks-panel {
+    height: auto;
 }
 
 #page-filter {

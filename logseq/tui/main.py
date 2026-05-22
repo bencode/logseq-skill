@@ -9,7 +9,7 @@ from rich.text import Text
 from textual import events
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.reactive import reactive
 from textual.screen import Screen
 from textual.timer import Timer
@@ -70,8 +70,10 @@ class MainScreen(Screen):
                 yield Input(placeholder="filter pages...", id="page-filter")
                 yield ListView(id="page-list")
             with Vertical(id="right"):
-                yield Static(id="view-panel", expand=True, markup=False)
-                yield Static(id="backlinks-panel", markup=True)
+                with VerticalScroll(id="view-scroll"):
+                    yield Static(id="view-panel", expand=True, markup=False)
+                with VerticalScroll(id="backlinks-scroll"):
+                    yield Static(id="backlinks-panel", markup=True)
         yield Footer()
 
     def on_mount(self) -> None:
@@ -154,6 +156,7 @@ class MainScreen(Screen):
     def _do_render_current(self) -> None:
         new = self.current
         view = self.query_one("#view-panel", Static)
+        view_scroll = self.query_one("#view-scroll", VerticalScroll)
         bl = self.query_one("#backlinks-panel", Static)
         if new is None:
             view.update("(no page)")
@@ -169,6 +172,7 @@ class MainScreen(Screen):
             error_text = Text()
             error_text.append(f"error: {type(e).__name__}: {e}", style="red")
             view.update(error_text)
+        view_scroll.scroll_home(animate=False)
         try:
             results = queries.backlinks(self.vault, new.title, limit=10)
         except (
@@ -250,7 +254,9 @@ class MainScreen(Screen):
         self.query_one("#page-list", ListView).focus()
 
     def action_focus_view(self) -> None:
-        self.query_one("#view-panel", Static).focus()
+        # Focus the scrollable container so arrow keys / PgUp / PgDn /
+        # mouse-wheel scroll the long page content.
+        self.query_one("#view-scroll", VerticalScroll).focus()
 
     # --- filter / Logseq-style ---
 

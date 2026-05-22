@@ -356,6 +356,40 @@ async def test_filter_does_not_reset_cursor_when_current_still_visible(
 
 
 @pytest.mark.asyncio
+async def test_view_panel_is_scrollable_for_long_content(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Long pages must render into a scrollable container, not get truncated."""
+    from textual.containers import VerticalScroll
+
+    from logseq import index as index_module
+
+    monkeypatch.setattr(index_module, "CACHE_DIR", tmp_path / "cache")
+    v = tmp_path / "vault"
+    (v / "logseq").mkdir(parents=True)
+    (v / "logseq" / "config.edn").write_text("{}", encoding="utf-8")
+    (v / "pages").mkdir()
+    # 200 blocks — comfortably more than a typical terminal height
+    long_content = "\n".join(f"- block number {i}" for i in range(200))
+    (v / "pages" / "Long.md").write_text(long_content, encoding="utf-8")
+    reindex(v)
+
+    app = LogseqTUI(v)
+    async with app.run_test(size=(80, 30)) as pilot:
+        await pilot.pause(0.2)
+        screen: MainScreen = app.screen  # type: ignore[assignment]
+        # The right pane contains scrollable containers, not bare Static
+        scroll = screen.query_one("#view-scroll", VerticalScroll)
+        assert scroll is not None
+        # And the Static inside it can grow beyond the visible viewport
+        # (height=auto in css), so the scroll container has scroll work to do
+        assert scroll.virtual_size.height > scroll.size.height, (
+            f"view-scroll has nothing to scroll: "
+            f"virtual={scroll.virtual_size}, visible={scroll.size}"
+        )
+
+
+@pytest.mark.asyncio
 async def test_app_exits_3_when_no_index(tmp_path: Path) -> None:
     v = tmp_path / "vault"
     (v / "logseq").mkdir(parents=True)

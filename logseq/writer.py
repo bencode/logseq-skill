@@ -10,10 +10,14 @@ representative content shape."""
 
 from __future__ import annotations
 
+import os
 from dataclasses import replace
+from datetime import date
+from pathlib import Path
 
 from .model import Block, Page
-from .parser import _scan_refs
+from .parser import _scan_refs, parse
+from .serializer import serialize
 
 # Logseq syntax fragments we refuse to construct because they'd flip the
 # parser into a multi-line state that single-line construction can't model
@@ -121,3 +125,84 @@ def append_block(page: Page, new_block: Block) -> Page:
         raw_lines=placed_raw,
     )
     return replace(page, blocks=[*page.blocks, placed])
+
+
+# ============================================================================
+# File-level write API (Stage 6b)
+# ============================================================================
+
+
+class FileChangedDuringWrite(RuntimeError):
+    """Raised when the target file's mtime changed between our read and
+    write — Logseq desktop or another writer may have touched it."""
+
+
+def append_to_page_file(
+    path: Path,
+    content: str,
+    *,
+    marker: str | None = None,
+    properties: dict[str, str] | None = None,
+    explicit_id: str | None = None,
+    depth: int = 0,
+) -> str:
+    """Read `path` → parse → construct + append a block → atomic write back.
+    Returns the new block's uuid (the explicit_id you passed, or the
+    auto:<sha1> the parser assigns on the next read).
+
+    Atomicity: writes to `<path>.tmp` then `os.replace` (POSIX-atomic).
+    Race detection: if the file's mtime changes between our read and our
+    write, raises FileChangedDuringWrite — caller should retry."""
+    if path.exists():
+        before_mtime = path.stat().st_mtime
+        text = path.read_text(encoding="utf-8-sig")
+    else:
+        before_mtime = None
+        text = ""
+    page = parse(text, str(path))
+    new = construct_block(
+        content,
+        depth=depth,
+        marker=marker,
+        properties=properties,
+        explicit_id=explicit_id,
+    )
+    updated = append_block(page, new)
+    new_text = serialize(updated)
+
+    if before_mtime is not None and path.stat().st_mtime != before_mtime:
+        raise FileChangedDuringWrite(
+            f"{path} changed under us between read ({before_mtime}) "
+            f"and write ({path.stat().st_mtime}); refusing to overwrite"
+        )
+
+    tmp = path.with_name(path.name + ".tmp")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp.write_text(new_text, encoding="utf-8")
+    os.replace(tmp, path)
+
+    if explicit_id is not None:
+        return explicit_id
+    # Re-parse to get the auto-uuid the parser computed for the new block
+    reread = parse(path.read_text(encoding="utf-8-sig"), str(path))
+    return reread.blocks[-1].uuid
+
+
+def append_to_today(
+    vault: Path,
+    content: str,
+    *,
+    marker: str | None = None,
+    properties: dict[str, str] | None = None,
+) -> Path:
+    """Append `content` to today's journal in `vault`. Creates the journal
+    file if missing (no header). Returns the journal file path."""
+    today = date.today().isoformat()
+    fname = "_".join(today.split("-")) + ".md"
+    journal_dir = vault / "journals"
+    journal_dir.mkdir(parents=True, exist_ok=True)
+    path = journal_dir / fname
+    append_to_page_file(
+        path, content, marker=marker, properties=properties
+    )
+    return path

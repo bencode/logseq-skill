@@ -12,7 +12,13 @@ import pytest
 
 from logseq.parser import parse
 from logseq.serializer import serialize
-from logseq.writer import append_block, construct_block
+from logseq.writer import (
+    FileChangedDuringWrite,
+    append_block,
+    append_to_page_file,
+    append_to_today,
+    construct_block,
+)
 
 # ============================================================================
 # Block construction roundtrip — matrix of representative content shapes
@@ -288,3 +294,120 @@ def test_real_vault_file_survives_append(vault_md: Path) -> None:
     assert reparsed.blocks[-1].content == "__test_sentinel__"
     assert reparsed.blocks[-1].uuid == "00000000-0000-0000-0000-000000000001"
     assert reparsed.blocks[-1].has_explicit_id
+
+
+# ============================================================================
+# Stage 6b: file-level write API — atomic write + race detection
+# ============================================================================
+
+
+def test_append_to_page_file_creates_new_file(tmp_path: Path) -> None:
+    path = tmp_path / "Fresh.md"
+    uuid = append_to_page_file(path, "first content here", marker="TODO")
+    assert path.exists()
+    text = path.read_text(encoding="utf-8")
+    assert "TODO first content here" in text
+    # uuid is auto:<sha1> since no explicit_id
+    assert uuid.startswith("auto:")
+
+
+def test_append_to_page_file_preserves_existing_content(tmp_path: Path) -> None:
+    path = tmp_path / "Existing.md"
+    path.write_text("- block one\n- block two\n", encoding="utf-8")
+    append_to_page_file(path, "block three")
+    page = parse(path.read_text(encoding="utf-8"), str(path))
+    assert [b.content for b in page.blocks] == ["block one", "block two", "block three"]
+
+
+def test_append_to_page_file_with_explicit_id_returns_it(tmp_path: Path) -> None:
+    path = tmp_path / "WithId.md"
+    target_id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+    returned = append_to_page_file(path, "anchored", explicit_id=target_id)
+    assert returned == target_id
+    page = parse(path.read_text(encoding="utf-8"), str(path))
+    assert page.blocks[-1].uuid == target_id
+    assert page.blocks[-1].has_explicit_id
+
+
+def test_append_to_page_file_is_atomic_no_tmp_leftover(tmp_path: Path) -> None:
+    path = tmp_path / "Foo.md"
+    append_to_page_file(path, "x")
+    tmp = path.with_name(path.name + ".tmp")
+    assert not tmp.exists(), "tmp file leaked after successful write"
+
+
+def test_append_to_page_file_detects_concurrent_change(tmp_path: Path) -> None:
+    import os as _os
+    import time as _time
+
+    path = tmp_path / "Racing.md"
+    path.write_text("- initial\n", encoding="utf-8")
+    # Force a future mtime so the post-construct stat check fails
+    fake_future = _time.time() + 1000
+    _os.utime(path, (fake_future, fake_future))
+
+    # Monkey-patch the parse step's mtime check by writing the file again
+    # mid-flight. Easier: directly call and assert RuntimeError by simulating
+    # a change between two calls. Simplest test: directly modify mtime to
+    # simulate the race.
+    # We can also: read file, then re-touch it before our write triggers
+    # the comparison. Construct a minimal repro using stat differences.
+    from logseq import writer as wr
+
+    # Mock the stat by patching: read, then between parse and stat, mutate
+    # the file's mtime. Easiest: monkeypatch Path.stat to return changing
+    # values. Use a simpler integration approach — write the file out-of-band
+    # using a sibling helper to bump mtime.
+
+    # Capture before_mtime in append_to_page_file = current stat.
+    # Then before write, file's mtime must differ to raise. Achieved by
+    # touching the file inside the call. Hack: patch Path.read_text to
+    # also bump mtime via os.utime so the subsequent stat returns a
+    # different value.
+    real_read = Path.read_text
+
+    def racing_read(self, *args, **kwargs):
+        out = real_read(self, *args, **kwargs)
+        # Bump mtime AFTER read so the stat check at write time differs
+        st = self.stat()
+        _os.utime(self, (st.st_atime, st.st_mtime + 100))
+        return out
+
+    Path.read_text = racing_read  # type: ignore[method-assign]
+    try:
+        with pytest.raises(FileChangedDuringWrite):
+            wr.append_to_page_file(path, "racy")
+    finally:
+        Path.read_text = real_read  # type: ignore[method-assign]
+
+
+def test_append_to_today_creates_journal_if_missing(tmp_path: Path) -> None:
+    from datetime import date as _date
+
+    vault = tmp_path / "vault"
+    (vault / "logseq").mkdir(parents=True)
+    (vault / "logseq" / "config.edn").write_text("{}", encoding="utf-8")
+
+    p = append_to_today(vault, "captured from terminal", marker="TODO")
+    expected_name = "_".join(_date.today().isoformat().split("-")) + ".md"
+    assert p.name == expected_name
+    assert p.exists()
+    page = parse(p.read_text(encoding="utf-8"), str(p))
+    assert page.blocks[-1].content == "captured from terminal"
+    assert page.blocks[-1].marker == "TODO"
+
+
+def test_append_to_today_appends_to_existing_journal(tmp_path: Path) -> None:
+    from datetime import date as _date
+
+    vault = tmp_path / "vault"
+    (vault / "logseq").mkdir(parents=True)
+    (vault / "logseq" / "config.edn").write_text("{}", encoding="utf-8")
+    journals = vault / "journals"
+    journals.mkdir()
+    fname = "_".join(_date.today().isoformat().split("-")) + ".md"
+    (journals / fname).write_text("- morning task\n", encoding="utf-8")
+
+    append_to_today(vault, "afternoon thought")
+    page = parse((journals / fname).read_text(encoding="utf-8"), str(journals / fname))
+    assert [b.content for b in page.blocks] == ["morning task", "afternoon thought"]

@@ -73,17 +73,21 @@ def _has_fts_operators(q: str) -> bool:
 
 def _tokenize_advanced(query: str) -> str:
     """Re-tokenize phrases inside `"..."` but leave operators alone.
-    Imperfect — falls back to passing the rest through verbatim, so
-    advanced users keep control."""
+
+    Defensive on malformed quoting: if the number of `"` characters is
+    odd, the user has an unmatched quote — fall back to "treat the whole
+    thing as plain text", which (a) avoids emitting malformed FTS5 syntax
+    and (b) still gives the user some result for what they typed."""
+    if query.count('"') % 2 != 0:
+        # Strip the orphan quote(s) and tokenize as plain. Better than
+        # passing a syntactically-broken query to FTS5.
+        return tokenize_for_index(query.replace('"', ""))
     out: list[str] = []
     i = 0
     while i < len(query):
         if query[i] == '"':
-            # find closing quote
             j = query.find('"', i + 1)
-            if j == -1:
-                out.append(query[i:])
-                break
+            # j != -1 guaranteed by the even-count precondition above
             phrase = query[i + 1 : j]
             tokenized = tokenize_for_index(phrase)
             out.append(f'"{tokenized}"')

@@ -52,21 +52,29 @@ Claude will detect the Logseq directory among your working dirs and call the CLI
 ## CLI reference
 
 ```
+# Atomic file reads (LLM convenience — saves tool calls):
 logseq parse <file>                          # → {page, blocks[]} JSON
 logseq page  <file>                          # → just the page metadata
 logseq journal <date> --in <dir>             # <date> = today | YYYY-MM-DD
-logseq find-page <name> <dir> [<dir>...]     # → lines of "exact|substring\t<abs-path>"
-logseq index <vault> [--full]                # build/refresh SQLite index (incremental)
-logseq stats <vault>                          # → JSON {pages, blocks, refs, db_size_bytes, ...}
+logseq find-page <name> <dir> [<dir>...]     # → "exact|substring\t<abs-path>"
+
+# DB-backed (the actual value-add — Logseq itself has no DB):
+logseq index <vault> [--full]                # build/refresh SQLite + FTS5 index
+logseq stats <vault>                         # → JSON {pages, blocks, refs, ...}
+logseq search <query> <vault>                # FTS5 + jieba CJK tokenization
+logseq backlinks <name> <vault>              # who links to this page
+logseq todos <vault>                         # TODO/DOING aggregator
 ```
 
-See `SKILL.md` for the JSON contract.
+See `SKILL.md` for the JSON contract and the `logseq://` URL convention that lets Claude's results land directly in Logseq desktop with a `Cmd+Click`.
+
+**Not in this CLI**: visual rendering, editing, capture. Logseq desktop covers reading + writing (Cmd+Click on the URLs Claude emits); LLM `Edit` covers ad-hoc file edits. This skill stays scoped to "the LLM-powered query layer".
 
 ## Run tests
 
 ```bash
 .venv/bin/pytest -q
-# parser + serializer + round-trip + CLI + TUI; ~1229 tests in ~9s
+# parser + serializer + round-trip + CLI; ~1200 tests in ~2s
 ```
 
 If `LOGSEQ_VAULT` env var or `/Users/bencode/Documents/bcd-new` exists, an additional ~1100 round-trip tests run against that real vault to catch parser regressions.
@@ -81,11 +89,11 @@ Ruff is the only lint/format tool (config in `pyproject.toml [tool.ruff]`).
 .venv/bin/ruff format .             # format (opinionated; not yet adopted)
 ```
 
-Enabled rule families: pycodestyle (E/W), pyflakes (F), isort (I), pyupgrade (UP), bugbear (B), simplify (SIM), ruff-specific (RUF). `TID252` (relative-import warning) is intentionally not enabled — relative imports inside a package are idiomatic. Textual `BINDINGS = [...]` is per-file-ignored for `RUF012` (mutable class default) since it's a framework declarative convention.
+Enabled rule families: pycodestyle (E/W), pyflakes (F), isort (I), pyupgrade (UP), bugbear (B), simplify (SIM), ruff-specific (RUF). `TID252` (relative-import warning) is intentionally not enabled — relative imports inside a package are idiomatic. `assert False` is per-file-allowed in `tests/*`.
 
 ## Status
 
-Read-only with SQLite index. Future stages: full-text search command, backlinks command, write commands. The FTS5 table and refs index are already built into the index DB — stage 4 just adds the CLI wrappers. See the design document in `~/.claude/plans/` if you have access, or open an issue.
+DB-backed read API + jieba CJK tokenizer + atomic file primitives. Visual reading and edits delegate to Logseq desktop / LLM Edit respectively.
 
 ## Uninstall
 

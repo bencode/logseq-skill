@@ -140,19 +140,17 @@ Find blocks linking to a given page (`[[name]]` references).
 - Output: JSON array `[{page, uuid, content}, ...]`
 - Exit codes: same as `search`
 
-### `logseq view <name> <vault>`
-Pretty-print a page to stdout with Rich (colored refs, tags, markers; nested block tree). Useful when the user is at the terminal and wants a quick preview without opening Logseq desktop. **For most "show me page X" requests, prefer the `logseq://` URL approach (§1.2)** — it lands the user in the full visual UI of Logseq, which is the right tool for reading.
-- `<name>` resolves in this order: `"today"` → today's journal; `YYYY-MM-DD` → that journal; path containing `/` or ending `.md` → file directly; else page-name lookup (exact then substring).
-- Exit codes: 0 success; 2 not a vault / bad args; 5 page not found
+### Reading a page — emit a `logseq://` URL (§1.2), don't print content here
+
+We **deliberately have no `view` / pretty-render CLI**. To show the user a page, generate a markdown link with `logseq://graph/<graph>?page=<urlencoded-name>` and let them `Cmd+Click` to land in Logseq desktop's full visual UI. See §1.2 for the exact URL templates and example output. For programmatic reads (parsing structure), use `logseq parse <file>` or just `Read` the .md file.
 
 ### Writes — use Edit tool directly, not a CLI command
 
-We **deliberately have no `capture`/`append` CLI**. LLM (you, Claude) handle writes natively via the `Edit` / `Write` tools — same number of tool calls as a CLI wrapper would be, but more flexible (you can insert in the middle of a file, edit existing blocks, construct nested structures, etc.).
+We **deliberately have no `capture`/`append` CLI**. LLM (you, Claude) handle writes natively via the `Edit` / `Write` tools — more flexible than a CLI wrapper (you can insert in the middle of a file, edit existing blocks, construct nested structures, etc.).
 
 When the user says "remind me to X" or "add Y to my notes":
-1. **For today's journal**: `Read` `<vault>/journals/YYYY_MM_DD.md` (create if missing), `Edit` to append the new bullet line, then `logseq index <vault>` to refresh the index. **Format**: `- TODO write the blog post` (tab-indent only if nested, leading newline if the existing file doesn't end with `\n`).
+1. **For today's journal**: `Read` `<vault>/journals/YYYY_MM_DD.md` (create if missing), `Edit` to append the new bullet line, then `logseq index <vault>` to refresh the index. **Format**: `- TODO write the blog post` (tab-indent only if nested; if the existing file doesn't end with `\n`, prepend `\n` to your new line to avoid splicing onto a previous naked `\t-` bullet).
 2. **For an existing named page**: same pattern on `<vault>/pages/<Name>.md`.
-3. **Programmatic writes from the TUI**: the TUI's `c` capture modal uses `logseq.writer.append_to_today()` internally — that Python API is still present and corpus-certified, just not exposed as a CLI.
 
 ### `logseq todos <vault> [--marker M] [--page P] [--limit N]`
 List blocks with a task marker.
@@ -243,7 +241,6 @@ What we DO:
 - ✅ Page-ref backlinks (`backlinks`)
 - ✅ TODO/DOING aggregation across vault (`todos`)
 - ✅ Single-page structured parsing (`parse`, `page`, `journal`, `find-page`)
-- ✅ Terminal preview (`view`) when user doesn't want to switch apps
 - ✅ `logseq://` URL emission so Claude's findings are one Cmd+Click away from Logseq desktop's visual UI
 
 What we explicitly DON'T do (by design — Logseq desktop does these well):

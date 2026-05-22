@@ -79,6 +79,17 @@ CREATE TRIGGER IF NOT EXISTS blocks_ad AFTER DELETE ON blocks BEGIN
     INSERT INTO blocks_fts(blocks_fts, rowid, tokenized_content)
         VALUES('delete', old.rowid, old.tokenized_content);
 END;
+
+-- Defense-in-depth: today the indexer only does INSERT+DELETE on changed
+-- files (no UPDATE), so this trigger never fires in practice. Defined
+-- anyway so that any future code path doing `UPDATE blocks SET ...`
+-- keeps the FTS5 view in sync rather than silently desyncing.
+CREATE TRIGGER IF NOT EXISTS blocks_au AFTER UPDATE ON blocks BEGIN
+    INSERT INTO blocks_fts(blocks_fts, rowid, tokenized_content)
+        VALUES('delete', old.rowid, old.tokenized_content);
+    INSERT INTO blocks_fts(rowid, tokenized_content)
+        VALUES (new.rowid, new.tokenized_content);
+END;
 """
 
 

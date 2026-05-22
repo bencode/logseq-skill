@@ -3,7 +3,7 @@ name = "logseq-skill"
 version = "0.1.0"
 description = "Parser, indexer, and writer for Logseq markdown vaults — Claude Code skill foundation."
 requires-python = ">=3.11"
-dependencies = ["jieba>=0.42", "rich>=13"]
+dependencies = ["jieba>=0.42"]
 
 [project.optional-dependencies]
 dev = ["pytest>=7", "ruff>=0.6"]

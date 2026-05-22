@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from .commands import atomic, db, view
+from .commands import atomic, db
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -59,15 +59,6 @@ def main(argv: list[str] | None = None) -> int:
     p_todos.add_argument("--page", default=None, help="Limit to one page name")
     p_todos.add_argument("--limit", type=int, default=50)
 
-    p_view = sub.add_parser(
-        "view", help="Pretty-render a page with Rich (colored refs, tags, markers)"
-    )
-    p_view.add_argument(
-        "name",
-        help="Page name, 'today', 'YYYY-MM-DD', or a file path",
-    )
-    p_view.add_argument("vault", help="Logseq vault (with logseq/config.edn)")
-
     args = p.parse_args(argv)
     return _dispatch(args)
 
@@ -96,8 +87,6 @@ def _dispatch(args: argparse.Namespace) -> int:
         )
     if args.cmd == "todos":
         return db.cmd_todos(args.vault, args.marker, args.page, args.limit)
-    if args.cmd == "view":
-        return view.cmd_view(args.name, args.vault)
     return 2
 
 

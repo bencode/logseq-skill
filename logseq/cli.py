@@ -29,6 +29,13 @@ def main(argv: list[str] | None = None) -> int:
     p_find.add_argument("name")
     p_find.add_argument("dirs", nargs="+", help="One or more directories to search")
 
+    p_index = sub.add_parser("index", help="(Re)build SQLite index for a vault")
+    p_index.add_argument("vault", help="Logseq vault directory (with logseq/config.edn)")
+    p_index.add_argument("--full", action="store_true", help="Force full rebuild")
+
+    p_stats = sub.add_parser("stats", help="Show index statistics for a vault")
+    p_stats.add_argument("vault")
+
     args = p.parse_args(argv)
 
     if args.cmd == "parse":
@@ -39,6 +46,10 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_journal(args.date, args.in_dir)
     if args.cmd == "find-page":
         return _cmd_find_page(args.name, args.dirs)
+    if args.cmd == "index":
+        return _cmd_index(args.vault, args.full)
+    if args.cmd == "stats":
+        return _cmd_stats(args.vault)
     return 2
 
 
@@ -104,6 +115,25 @@ def _cmd_find_page(name: str, dirs: list[str]) -> int:
             print(f"substring\t{p}")
 
     return 0 if (exact or substring) else 1
+
+
+def _cmd_index(vault: str, full: bool) -> int:
+    from .index import reindex
+    result = reindex(Path(vault), full=full)
+    _emit_json({
+        "scanned": result.scanned,
+        "skipped": result.skipped,
+        "reindexed": result.reindexed,
+        "deleted": result.deleted,
+        "elapsed_ms": result.elapsed_ms,
+    })
+    return 0
+
+
+def _cmd_stats(vault: str) -> int:
+    from .index import stats
+    _emit_json(stats(Path(vault)))
+    return 0
 
 
 if __name__ == "__main__":

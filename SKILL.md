@@ -49,6 +49,17 @@ Find page files by name in one or more directories (recursive `*.md` scan).
 - Output: one match per line, `<kind>\t<absolute-path>`, where `<kind>` is `exact` or `substring`
 - Exit 0 if any match, 1 if none
 
+### `logseq index <vault> [--full]`
+Build or refresh the SQLite index for a vault (vault = directory with `logseq/config.edn`).
+- Incremental by default: only re-parses files whose mtime+size changed; drops rows for deleted files
+- `--full` wipes the DB and rebuilds from scratch
+- DB path: `~/.cache/logseq-skill/<sha1(vault_abs_path)[:16]>.db`
+- Output: JSON `{scanned, skipped, reindexed, deleted, elapsed_ms}`
+- Real-world: ~1300ms for 1100 files full / ~10ms when nothing changed
+
+### `logseq stats <vault>`
+Show index status without rebuilding. Output: JSON `{db_path, db_exists, pages, blocks, refs, db_size_bytes, last_index_ts, vault_path, schema_version}`.
+
 ## 3. JSON contract (output of `parse` and `journal`)
 
 ```jsonc
@@ -109,10 +120,10 @@ grep -rln 'X' /path/to/logseq-dir/{journals,pages}/
 
 ## 5. What this skill explicitly does NOT do (yet)
 
-- ❌ Full-text search → stage 4 (`logseq search`)
-- ❌ Backlinks → stage 4 (`logseq backlinks`)
+- ❌ Full-text search command → stage 4 (`logseq search`). The FTS5 table exists and works via raw SQL on the index DB
+- ❌ Backlinks command → stage 4 (`logseq backlinks`). The `refs(target, kind)` index exists and works via raw SQL
 - ❌ Append / edit / delete blocks → stages 5-6
 - ❌ Markdown rendering → external browser component (planned)
-- ❌ SQLite index / persistent cache → stage 3
+- ✅ SQLite index / persistent cache → stage 3 done (`logseq index` / `logseq stats`)
 
-When asked for any of these, say so directly. Don't fake it by stitching together unreliable greps unless the user explicitly accepts that.
+When asked for full-text search or backlinks today, you may either tell the user the dedicated command isn't shipped, or query the index DB directly via `sqlite3 ~/.cache/logseq-skill/*.db '...'` if they accept raw SQL output. Don't fake it with unreliable greps.

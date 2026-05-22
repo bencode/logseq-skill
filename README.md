@@ -56,6 +56,8 @@ logseq parse <file>                          # → {page, blocks[]} JSON
 logseq page  <file>                          # → just the page metadata
 logseq journal <date> --in <dir>             # <date> = today | YYYY-MM-DD
 logseq find-page <name> <dir> [<dir>...]     # → lines of "exact|substring\t<abs-path>"
+logseq index <vault> [--full]                # build/refresh SQLite index (incremental)
+logseq stats <vault>                          # → JSON {pages, blocks, refs, db_size_bytes, ...}
 ```
 
 See `SKILL.md` for the JSON contract.
@@ -71,7 +73,7 @@ If `LOGSEQ_VAULT` env var or `/Users/bencode/Documents/bcd-new` exists, an addit
 
 ## Status
 
-Read-only MVP. Future stages: SQLite index, full-text search, backlinks, write commands. See the design document in `~/.claude/plans/` if you have access, or open an issue.
+Read-only with SQLite index. Future stages: full-text search command, backlinks command, write commands. The FTS5 table and refs index are already built into the index DB — stage 4 just adds the CLI wrappers. See the design document in `~/.claude/plans/` if you have access, or open an issue.
 
 ## Uninstall
 

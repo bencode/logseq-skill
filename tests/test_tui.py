@@ -503,16 +503,30 @@ async def test_list_navigation_clears_zoom(indexed_vault: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_jump_to_unindexed_page_notifies(indexed_vault: Path) -> None:
+async def test_jump_to_unindexed_page_enters_virtual(indexed_vault: Path) -> None:
+    """Logseq-style: clicking [[X]] where X has no .md file still navigates —
+    enters a virtual aggregator page showing every block that references X."""
+    from io import StringIO
+
+    from rich.console import Console
+    from textual.widgets import Static
+
     app = LogseqTUI(indexed_vault)
     async with app.run_test() as pilot:
         await pilot.pause()
         screen: MainScreen = app.screen  # type: ignore[assignment]
-        before = screen.current
-        screen.action_jump_page("NonexistentPage12345")
-        await pilot.pause()
-        # current should NOT change for an unresolvable ref
-        assert screen.current is before
+        # 'Trantor' has no .md file in the fixture but Use.md references it 3x
+        screen.action_jump_page("Trantor")
+        await pilot.pause(0.2)
+        assert screen.current is not None
+        assert screen.current.type == "virtual"
+        assert screen.current.title == "Trantor"
+        # Rendered view shows the virtual-page header
+        view = screen.query_one("#view-panel", Static)
+        console = Console(file=StringIO(), force_terminal=False, width=120)
+        console.print(view.renderable)
+        out = console.file.getvalue()
+        assert "[virtual · no .md file]" in out
 
 
 @pytest.mark.asyncio

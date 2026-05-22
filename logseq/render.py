@@ -94,6 +94,39 @@ def _render_block_at_depth(
     return text
 
 
+def render_virtual_page(
+    name: str,
+    referring_blocks: list[dict],
+    *,
+    ref_action: RefAction | None = None,
+) -> RenderableType:
+    """Logseq-style virtual page: when `[[X]]` is clicked but X has no .md
+    file, render an aggregator showing every block that references X.
+    Each row is one referring block; refs inside those blocks are themselves
+    clickable so the user can keep navigating."""
+    header = Text()
+    header.append("# ", style="bold dim")
+    header.append(name, style="bold")
+    header.append("    ", style="dim")
+    header.append("[virtual · no .md file]", style="dim italic yellow")
+
+    subheader = Text(
+        f"  {len(referring_blocks)} blocks reference this name",
+        style="dim",
+    )
+
+    parts: list[RenderableType] = [header, subheader, Rule(style="dim")]
+    if not referring_blocks:
+        parts.append(Text("(no references found)", style="dim italic"))
+        return Group(*parts)
+    for r in referring_blocks:
+        line = Text()
+        line.append(f"{r['page']}: ", style="cyan dim")
+        _append_with_refs(line, r["content"], ref_action=ref_action)
+        parts.append(line)
+    return Group(*parts)
+
+
 def render_block_subtree(
     page: Page,
     block_uuid: str,

@@ -17,7 +17,7 @@ from textual.widgets import Footer, Header, Input, ListItem, ListView, Static
 
 from .. import queries
 from ..parser import parse
-from ..render import render_block_subtree, render_page
+from ..render import render_block_subtree, render_page, render_virtual_page
 from .data import (
     PageRef,
     list_pages,
@@ -175,6 +175,10 @@ class MainScreen(Screen):
         if new is None:
             view.update("(no page)")
             bl.update("")
+            return
+        if new.type == "virtual":
+            self._render_virtual_page(new, view, bl)
+            view_scroll.scroll_home(animate=False)
             return
         try:
             # utf-8-sig transparently strips BOM if present; raises on truly
@@ -343,8 +347,16 @@ class MainScreen(Screen):
     def action_jump_page(self, name: str) -> None:
         target = lookup_page_by_name(self.vault, name)
         if target is None:
-            self.notify(f"page not indexed: {name}", severity="warning")
-            return
+            # Logseq virtual page: no .md file, but blocks may reference the
+            # name. Build an ephemeral PageRef; _do_render_current detects
+            # type='virtual' and renders an aggregator of referring blocks.
+            target = PageRef(
+                name=name.lower(),
+                title=name,
+                type="virtual",
+                file_path="",
+                block_count=0,
+            )
         self._push_history()
         self._focused_block_uuid = None  # page-level jump → page-level view
         self.current = target
@@ -378,6 +390,30 @@ class MainScreen(Screen):
         self._focused_block_uuid = None
         self._do_render_current()
         self.notify("exited zoom", severity="information", timeout=1.0)
+
+    def _render_virtual_page(
+        self, page_ref: PageRef, view: Static, bl: Static
+    ) -> None:
+        """Render the Logseq-style virtual aggregator. The view shows every
+        block that references this name; the backlinks panel is suppressed
+        because the view itself IS the backlinks aggregator."""
+        try:
+            results = queries.backlinks(
+                self.vault, page_ref.title, limit=50, include_bare=True
+            )
+        except (
+            queries.IndexMissing,
+            queries.IndexStale,
+            sqlite3.OperationalError,
+            sqlite3.DatabaseError,
+        ):
+            results = []
+        bl.update(
+            Text("(virtual page · view above is the aggregator)", style="dim italic")
+        )
+        view.update(
+            render_virtual_page(page_ref.title, results, ref_action=_ref_action)
+        )
 
     def _render_for(self, page):
         """Pick the right renderer based on zoom state. If the focused uuid

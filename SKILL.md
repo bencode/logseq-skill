@@ -111,7 +111,7 @@ Bindings (vim-aligned):
 | `?` | open FTS search modal |
 | `D` | jump to today's journal |
 | `J` | toggle journals in list |
-| mouse click `[[X]]` / `#tag` | jump to that page |
+| mouse click `[[X]]` / `#tag` | jump to that page; if X has no `.md` file, enter a **virtual aggregator page** showing every block that references X (this is how Logseq itself treats tag-like links) |
 | mouse click `((uuid))` / `{{embed ((uuid))}}` | **zoom into that block** — view shows only the target block + descendants (Logseq-style focus), with a breadcrumb header |
 | `r` | open refs picker (keyboard-friendly list of all refs on current page; selecting a block ref also enters zoom) |
 | `z` | exit block zoom (back to full-page view) |

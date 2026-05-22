@@ -19,6 +19,7 @@ PAGE_REQUIRED_KEYS = {
     "aliases",
     "namespace_parent",
     "journal_day",
+    "block_count",
 }
 
 BLOCK_REQUIRED_KEYS = {
@@ -61,6 +62,8 @@ def test_to_dict_contract(md_path: Path) -> None:
     if page_obj["journal_day"] is not None:
         assert isinstance(page_obj["journal_day"], int)
         assert 19700101 <= page_obj["journal_day"] <= 99991231
+    assert isinstance(page_obj["block_count"], int)
+    assert page_obj["block_count"] == len(out["blocks"])
 
     for i, block in enumerate(out["blocks"]):
         loc = f"{md_path.name}[{i}]"
@@ -80,3 +83,12 @@ def test_to_dict_contract(md_path: Path) -> None:
         assert "raw_lines" not in block, f"{loc} raw_lines must not leak into JSON"
 
     json.dumps(out, ensure_ascii=False)
+
+
+def test_block_count_zero_on_empty_page(tmp_path: Path) -> None:
+    f = tmp_path / "Empty.md"
+    f.write_text("alias:: stub\n", encoding="utf-8")  # properties only, no bullets
+    page = parse(f.read_text(encoding="utf-8"), str(f))
+    out = to_dict(page)
+    assert out["page"]["block_count"] == 0
+    assert out["blocks"] == []

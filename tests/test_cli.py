@@ -97,6 +97,31 @@ def test_find_page_no_match(fake_vault: Path) -> None:
     assert result.stdout == ""
 
 
+def test_find_page_non_empty_filters_empty_pages(tmp_path: Path) -> None:
+    pages = tmp_path / "pages"
+    pages.mkdir()
+    # All three stems substring-match query "page"
+    (pages / "EmptyPage.md").write_text("", encoding="utf-8")
+    (pages / "PropertiesPage.md").write_text(
+        "alias:: stub\n", encoding="utf-8"  # properties only, no bullets
+    )
+    (pages / "ContentPage.md").write_text(
+        "- has content\n- more content\n", encoding="utf-8"
+    )
+
+    result = run(["find-page", "page", str(tmp_path)])
+    assert result.returncode == 0
+    assert "EmptyPage.md" in result.stdout
+    assert "PropertiesPage.md" in result.stdout
+    assert "ContentPage.md" in result.stdout
+
+    result = run(["find-page", "page", str(tmp_path), "--non-empty"])
+    assert result.returncode == 0
+    assert "EmptyPage.md" not in result.stdout
+    assert "PropertiesPage.md" not in result.stdout
+    assert "ContentPage.md" in result.stdout
+
+
 def test_index_returns_2_on_non_vault(tmp_path: Path) -> None:
     result = run(["index", str(tmp_path)])
     assert result.returncode == 2

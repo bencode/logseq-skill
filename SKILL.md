@@ -42,11 +42,12 @@ Same as parse but only the `page` object (cheaper for metadata-only queries).
 - Resolves to `<dir>/journals/YYYY_MM_DD.md` and parses it
 - Exit 1 if the file doesn't exist; exit 2 if `<date>` is malformed
 
-### `logseq find-page <name> <dir> [<dir>...]`
+### `logseq find-page <name> <dir> [<dir>...] [--non-empty]`
 Find page files by name in one or more directories (recursive `*.md` scan).
 - Exact lowercase match (`Path.stem.lower() == name.lower()`) is preferred
 - If no exact match, falls back to substring (`name.lower() in stem.lower()`)
 - Output: one match per line, `<kind>\t<absolute-path>`, where `<kind>` is `exact` or `substring`
+- `--non-empty` filters out pages with zero blocks (common Logseq placeholders auto-created by clicking `[[X]]` but never written)
 - Exit 0 if any match, 1 if none
 
 ### `logseq index <vault> [--full]`
@@ -74,18 +75,22 @@ The cache DB is purely derived (vault is the source of truth), so a rebuild lose
 ### `logseq stats <vault>`
 Show index status without rebuilding. Output: JSON `{db_path, db_exists, valid, pages, blocks, refs, db_size_bytes, last_index_ts, vault_path, schema_version, expected_schema_version, schema_outdated}`. On corrupt DB returns `{db_exists: true, valid: false, error: "..."}`.
 
-### `logseq search <query> <vault> [--limit N]`
+### `logseq search <query> <vault> [--limit N] [--snippet] [--min-len N]`
 FTS5 full-text search across all blocks in the vault.
 - Default `--limit 20`
 - `<query>` is an FTS5 MATCH expression: bare word, `"exact phrase"`, `term1 AND term2`, `term1 OR term2`, `prefix*`
+- Results ranked by BM25 relevance (lower score = better)
+- `--snippet` adds a `snippet` field per result with `«matched»` highlights and `...` context truncation
+- `--min-len N` filters out blocks shorter than N chars. **Crucial knob for tag-heavy vaults**: BM25 favors short blocks (high term-frequency / length ratio), so bare `[[X]]` tag-blocks often dominate without this filter. Try `--min-len 25` for "substantive" results.
 - CJK is tokenized per-codepoint (unicode61 limitation); phrase search across CJK characters works but single-word lookup is approximate
-- Output: JSON array `[{page, uuid, content}, ...]`
+- Output: JSON array `[{page, uuid, content, snippet?}, ...]`
 - Exit codes: 0 success (even with empty results); 3 if no index for vault; 4 if index stale
 
-### `logseq backlinks <name> <vault> [--limit N] [--case-sensitive]`
+### `logseq backlinks <name> <vault> [--limit N] [--case-sensitive] [--include-bare]`
 Find blocks linking to a given page (`[[name]]` references).
 - Default `--limit 50`
 - Case-insensitive by default (matches `[[Trantor]]` when querying `trantor`); pass `--case-sensitive` for exact match
+- **Bare tag-only blocks** (content is literally just `[[name]]`, a common Logseq idiom for daily status markers) are filtered out by default to surface substantive backlinks. Pass `--include-bare` to see them too.
 - Only page refs (`kind='page'`); block refs (`((uuid))`) not yet covered
 - Output: JSON array `[{page, uuid, content}, ...]`
 - Exit codes: same as `search`
@@ -110,7 +115,8 @@ List blocks with a task marker.
     "properties": {"alias": "..."},
     "aliases": ["foo", "bar baz"],     // parsed from `alias::` property
     "namespace_parent": null,           // "foo" if page is "foo/bar"
-    "journal_day": 20260521 | null      // YYYYMMDD for journals
+    "journal_day": 20260521 | null,     // YYYYMMDD for journals
+    "block_count": 7                     // len(blocks); 0 = Logseq placeholder page
   },
   "blocks": [
     {

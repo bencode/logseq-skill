@@ -15,16 +15,36 @@ class IndexStale(Exception):
     """Cache DB is corrupt or has an outdated schema_version."""
 
 
-def search(vault_dir: Path, query: str, *, limit: int = 20) -> list[dict]:
+def search(
+    vault_dir: Path,
+    query: str,
+    *,
+    limit: int = 20,
+    snippet: bool = False,
+    min_len: int = 0,
+) -> list[dict]:
+    if snippet:
+        sel = (
+            "b.page, b.uuid, b.content, "
+            "snippet(blocks_fts, 0, '«', '»', '...', 10)"
+        )
+    else:
+        sel = "b.page, b.uuid, b.content"
     with _read(vault_dir) as conn:
         rows = conn.execute(
-            "SELECT b.page, b.uuid, b.content "
-            "FROM blocks b "
-            "JOIN blocks_fts ON blocks_fts.rowid = b.rowid "
-            "WHERE blocks_fts MATCH ? "
-            "LIMIT ?",
-            (query, limit),
+            f"SELECT {sel} "
+            f"FROM blocks b "
+            f"JOIN blocks_fts ON blocks_fts.rowid = b.rowid "
+            f"WHERE blocks_fts MATCH ? AND LENGTH(b.content) >= ? "
+            f"ORDER BY bm25(blocks_fts) "
+            f"LIMIT ?",
+            (query, min_len, limit),
         ).fetchall()
+    if snippet:
+        return [
+            {"page": r[0], "uuid": r[1], "content": r[2], "snippet": r[3]}
+            for r in rows
+        ]
     return [{"page": r[0], "uuid": r[1], "content": r[2]} for r in rows]
 
 
@@ -34,13 +54,20 @@ def backlinks(
     *,
     limit: int = 50,
     case_sensitive: bool = False,
+    include_bare: bool = False,
 ) -> list[dict]:
+    conds = ["r.kind = 'page'"]
+    params: list[object] = []
     if case_sensitive:
-        where = "r.target = ? AND r.kind = 'page'"
-        params: tuple[object, ...] = (name, limit)
+        conds.append("r.target = ?")
     else:
-        where = "LOWER(r.target) = LOWER(?) AND r.kind = 'page'"
-        params = (name, limit)
+        conds.append("LOWER(r.target) = LOWER(?)")
+    params.append(name)
+    if not include_bare:
+        conds.append("LOWER(TRIM(b.content)) != LOWER(?)")
+        params.append(f"[[{name}]]")
+    params.append(limit)
+    where = " AND ".join(conds)
     with _read(vault_dir) as conn:
         rows = conn.execute(
             f"SELECT b.page, b.uuid, b.content "
@@ -48,7 +75,7 @@ def backlinks(
             f"JOIN blocks b ON r.block_uuid = b.uuid "
             f"WHERE {where} "
             f"LIMIT ?",
-            params,
+            tuple(params),
         ).fetchall()
     return [{"page": r[0], "uuid": r[1], "content": r[2]} for r in rows]
 

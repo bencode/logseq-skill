@@ -24,6 +24,7 @@ def to_dict(page: Page) -> dict[str, Any]:
             "aliases": page.aliases,
             "namespace_parent": page.namespace_parent,
             "journal_day": page.journal_day,
+            "block_count": len(page.blocks),
         },
         "blocks": [_block_to_dict(b) for b in page.blocks],
     }

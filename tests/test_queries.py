@@ -105,6 +105,71 @@ def test_todos_page_filter(indexed_vault: Path) -> None:
     assert len(results) == 1  # only the TODO in Use.md (DOING is separate marker)
 
 
+def test_search_orders_by_relevance(
+    vault: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from logseq import index as index_module
+
+    monkeypatch.setattr(index_module, "CACHE_DIR", tmp_path / "cache")
+
+    (vault / "pages" / "Sparse.md").write_text(
+        "- the lone foo mention\n", encoding="utf-8"
+    )
+    (vault / "pages" / "Dense.md").write_text(
+        "- foo foo foo, lots of foo here\n", encoding="utf-8"
+    )
+    reindex(vault)
+
+    results = search(vault, "foo")
+    assert len(results) == 2
+    # BM25 ranks the denser block higher (lower score = better)
+    assert results[0]["page"] == "dense"
+    assert results[1]["page"] == "sparse"
+
+
+def test_search_snippet_field(
+    vault: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from logseq import index as index_module
+
+    monkeypatch.setattr(index_module, "CACHE_DIR", tmp_path / "cache")
+
+    (vault / "pages" / "A.md").write_text(
+        "- this block has the special word lookhere in the middle\n",
+        encoding="utf-8",
+    )
+    reindex(vault)
+
+    no_snip = search(vault, "lookhere")
+    assert "snippet" not in no_snip[0]
+
+    with_snip = search(vault, "lookhere", snippet=True)
+    assert "snippet" in with_snip[0]
+    assert "«lookhere»" in with_snip[0]["snippet"]
+
+
+def test_backlinks_skips_bare_tags_by_default(indexed_vault: Path) -> None:
+    bare_path = indexed_vault / "pages" / "BareRef.md"
+    bare_path.write_text("- [[Trantor]]\n", encoding="utf-8")
+    reindex(indexed_vault)
+
+    results = backlinks(indexed_vault, "Trantor")
+    pages = {r["page"] for r in results}
+    assert "bareref" not in pages  # bare [[Trantor]] filtered out
+    assert "use" in pages           # substantive blocks kept
+
+
+def test_backlinks_include_bare_flag(indexed_vault: Path) -> None:
+    bare_path = indexed_vault / "pages" / "BareRef.md"
+    bare_path.write_text("- [[Trantor]]\n", encoding="utf-8")
+    reindex(indexed_vault)
+
+    results = backlinks(indexed_vault, "Trantor", include_bare=True)
+    pages = {r["page"] for r in results}
+    assert "bareref" in pages
+    assert "use" in pages
+
+
 def test_raises_index_missing_when_no_db(vault: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     from logseq import index as index_module
 

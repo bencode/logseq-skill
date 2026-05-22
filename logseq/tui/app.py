@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import sqlite3
 from pathlib import Path
 
 from textual.app import App
 from textual.binding import Binding
 from textual.theme import Theme
 
-from ..index import db_path_for, needs_rebuild, reindex, validate_vault
+from ..index import db_path_for, needs_rebuild, validate_vault
 from .main import MainScreen
 
 
@@ -60,6 +59,16 @@ class LogseqTUI(App):
     def on_mount(self) -> None:
         self.register_theme(LOGSEQ_BLACK)
         self.register_theme(LOGSEQ_WHITE)
+        if self._initial_theme not in self.available_themes:
+            names = ", ".join(sorted(self.available_themes.keys()))
+            self.exit(
+                message=(
+                    f"Unknown theme {self._initial_theme!r}. "
+                    f"Available: {names}"
+                ),
+                return_code=2,
+            )
+            return
         self.theme = self._initial_theme
         status = _check_index(self.vault)
         if status == "missing":

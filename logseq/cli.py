@@ -251,11 +251,19 @@ def _cmd_tui(vault: str, theme: str) -> int:
     try:
         from .tui.app import run
     except ImportError as e:
-        print(
-            f"error: TUI requires `pip install -e \".[tui]\"` "
-            f"(missing: {e.name})",
-            file=sys.stderr,
-        )
+        name = e.name or ""
+        if name.startswith("textual"):
+            print(
+                "error: TUI requires Textual >= 0.86 "
+                f"(import failed: {e})",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                f"error: TUI requires `pip install -e \".[tui]\"` "
+                f"(missing: {name or e})",
+                file=sys.stderr,
+            )
         return 2
     return run(Path(vault), theme=theme)
 
@@ -272,7 +280,8 @@ def _cmd_view(name: str, vault: str) -> int:
     from rich.console import Console
     from .parser import parse
     from .render import render_page
-    text = path.read_text(encoding="utf-8")
+    # utf-8-sig handles Windows-edited files with BOM transparently
+    text = path.read_text(encoding="utf-8-sig")
     page = parse(text, str(path))
     Console().print(render_page(page))
     return 0
@@ -286,7 +295,11 @@ def _resolve_view_target(name: str, vault: Path) -> Path:
         return _journal_path_or_error(vault, date.today().isoformat())
     if _looks_like_date(name):
         return _journal_path_or_error(vault, name)
-    if "/" in name or name.endswith(".md"):
+    # Treat as a literal file path only if it looks like one:
+    # absolute, starts with ./ or ../, or ends in .md.
+    # NOT if it contains '/' alone — Logseq namespace pages
+    # ("Project/Frontend") would otherwise be mis-classified.
+    if name.startswith(("/", "./", "../")) or name.endswith(".md"):
         p = Path(name)
         if not p.is_absolute():
             p = (vault / p).resolve()

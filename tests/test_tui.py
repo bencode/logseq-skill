@@ -23,6 +23,9 @@ def indexed_vault(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         "- alpha content [[Beta]]\n- TODO finish alpha\n", encoding="utf-8"
     )
     (v / "pages" / "Beta.md").write_text("- beta details\n", encoding="utf-8")
+    (v / "pages" / "Gamma.md").write_text(
+        "- gamma notes\n- more gamma\n", encoding="utf-8"
+    )
     (v / "pages" / "EmptyPage.md").write_text("", encoding="utf-8")  # placeholder
     (v / "journals" / "2024_01_15.md").write_text(
         "- morning routine\n", encoding="utf-8"
@@ -130,19 +133,20 @@ async def test_render_is_debounced_on_rapid_current_changes(
 
         screen._do_render_current = counting_render  # type: ignore[method-assign]
 
-        # Tight loop: change current 3 times with no await in between
+        # Tight loop: change current 3 times to genuinely distinct pages
+        # (fixture has Alpha, Beta, Gamma so reactive fires for each)
         pages = screen.all_pages
-        assert len(pages) >= 2
-        screen.current = pages[0]
-        screen.current = pages[1]
-        screen.current = pages[-1]
+        assert len(pages) >= 3, f"fixture too small: {[p.title for p in pages]}"
+        screen.current = pages[2]   # 1st distinct change
+        screen.current = pages[1]   # 2nd
+        screen.current = pages[0]   # 3rd — final
         # Immediately: no render fired (timer pending, will fire in 80ms)
         assert render_calls == [], f"render fired early: {render_calls}"
 
         # After > RENDER_DEBOUNCE settles, exactly ONE render fires for the
-        # final value (coalesced)
+        # final value (coalesced from 3 reactive triggers into 1 render)
         await pilot.pause(0.15)
-        assert render_calls == [pages[-1].title], (
+        assert render_calls == [pages[0].title], (
             f"expected 1 render of final page, got {render_calls}"
         )
 
@@ -230,6 +234,125 @@ async def test_G_jumps_to_bottom(indexed_vault: Path) -> None:
         await pilot.pause()
         lv = screen.query_one("#page-list")
         assert lv.index == len(screen.all_pages) - 1
+
+
+@pytest.mark.asyncio
+async def test_question_mark_opens_search_modal(indexed_vault: Path) -> None:
+    from logseq.tui.modals import SearchModal
+
+    app = LogseqTUI(indexed_vault)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("question_mark")
+        await pilot.pause()
+        assert isinstance(app.screen, SearchModal)
+
+
+@pytest.mark.asyncio
+async def test_capital_T_opens_theme_picker_with_live_preview(
+    indexed_vault: Path,
+) -> None:
+    from logseq.tui.modals import ThemePicker
+
+    app = LogseqTUI(indexed_vault)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        starting_theme = app.theme
+        await pilot.press("T")
+        await pilot.pause()
+        assert isinstance(app.screen, ThemePicker)
+        # Live-preview: arrowing down should immediately change app.theme
+        await pilot.press("down")
+        await pilot.pause()
+        assert app.theme != starting_theme, "theme did not live-preview on arrow"
+
+
+@pytest.mark.asyncio
+async def test_lowercase_t_opens_todos_modal(indexed_vault: Path) -> None:
+    from logseq.tui.modals import TodosModal
+
+    app = LogseqTUI(indexed_vault)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("t")
+        await pilot.pause()
+        assert isinstance(app.screen, TodosModal)
+
+
+@pytest.mark.asyncio
+async def test_unknown_theme_exits_2(indexed_vault: Path) -> None:
+    app = LogseqTUI(indexed_vault, theme="nonexistent-theme")
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.pause()
+    assert app.return_code == 2
+
+
+@pytest.mark.asyncio
+async def test_esc_cancels_pending_filter_timer(indexed_vault: Path) -> None:
+    """Esc-after-typing must cancel the pending filter; otherwise the
+    timer fires post-Esc and silently narrows the list."""
+    app = LogseqTUI(indexed_vault)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen: MainScreen = app.screen  # type: ignore[assignment]
+        screen.query_one("#page-filter").focus()
+        await pilot.pause()
+        # Type a few chars (timer is pending, value not applied yet)
+        await pilot.press("b", "e")
+        # Press Esc before the 150ms debounce fires
+        await pilot.press("escape")
+        # Wait longer than debounce — the stale timer must NOT fire
+        await pilot.pause(0.25)
+        assert screen.filter_text == "", (
+            f"stale filter applied after Esc: {screen.filter_text!r}"
+        )
+
+
+@pytest.mark.asyncio
+async def test_ctrl_r_refresh_preserves_show_journals_state(
+    indexed_vault: Path,
+) -> None:
+    """After J toggles journals on, Ctrl+R must not silently drop them."""
+    app = LogseqTUI(indexed_vault)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen: MainScreen = app.screen  # type: ignore[assignment]
+        await pilot.press("J")
+        await pilot.pause()
+        assert screen.show_journals is True
+        n_with_journals = len(screen.all_pages)
+
+        await pilot.press("ctrl+r")
+        await pilot.pause()
+        assert screen.show_journals is True, "show_journals reset by refresh"
+        assert len(screen.all_pages) == n_with_journals, (
+            "journals dropped from list despite show_journals=True"
+        )
+
+
+@pytest.mark.asyncio
+async def test_filter_does_not_reset_cursor_when_current_still_visible(
+    indexed_vault: Path,
+) -> None:
+    """Typing in filter shouldn't yank the cursor back to the top when the
+    currently-selected page is still in the filtered list."""
+    app = LogseqTUI(indexed_vault)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen: MainScreen = app.screen  # type: ignore[assignment]
+        # Pick the second page as current
+        screen.current = screen.all_pages[1]
+        await pilot.pause(0.15)
+        target = screen.current
+        # Apply a filter that still includes 'target' (use first char of title)
+        screen.filter_text = target.title[:1].lower()
+        await pilot.pause(0.05)
+        # current should remain target, not jump back to index 0
+        assert screen.current is not None
+        assert screen.current.name == target.name, (
+            f"filter yanked cursor: was {target.name}, became {screen.current.name}"
+        )
 
 
 @pytest.mark.asyncio

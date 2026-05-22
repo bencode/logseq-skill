@@ -14,10 +14,9 @@ from textual.containers import Horizontal, Vertical
 from textual.reactive import reactive
 from textual.screen import Screen
 from textual.timer import Timer
-from textual.widgets import Footer, Header, Input, Label, ListItem, ListView, Static
+from textual.widgets import Footer, Header, Input, ListItem, ListView, Static
 
 from .. import queries
-from ..db import connect
 from ..index import db_path_for
 from ..parser import parse
 from ..render import render_page
@@ -133,11 +132,19 @@ class MainScreen(Screen):
             if p.type == "journal":
                 label.stylize("cyan", 0, len(p.title))
             lv.append(ListItem(Static(label)))
-        if pages:
-            lv.index = 0
-            self.current = pages[0]
-        else:
+        if not pages:
             self.current = None
+            return
+        # Preserve cursor on current page if still visible (filter typing /
+        # J toggle shouldn't yank a navigating user back to the top)
+        keep_idx = 0
+        if self.current is not None:
+            for i, p in enumerate(pages):
+                if p.name == self.current.name and p.type == self.current.type:
+                    keep_idx = i
+                    break
+        lv.index = keep_idx
+        self.current = pages[keep_idx]
 
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id == "page-filter":
@@ -195,24 +202,38 @@ class MainScreen(Screen):
             bl.update("")
             return
         try:
-            text = Path(new.file_path).read_text(encoding="utf-8")
+            # utf-8-sig transparently strips BOM if present; raises on truly
+            # broken encodings (caught below)
+            text = Path(new.file_path).read_text(encoding="utf-8-sig")
             page = parse(text, new.file_path)
             view.update(render_page(page))
         except Exception as e:
-            view.update(f"[red]error: {type(e).__name__}: {e}[/red]")
+            error_text = Text()
+            error_text.append(f"error: {type(e).__name__}: {e}", style="red")
+            view.update(error_text)
         try:
             results = queries.backlinks(self.vault, new.title, limit=10)
-        except (queries.IndexMissing, queries.IndexStale) as e:
-            bl.update(f"[red]backlinks unavailable: {e}[/red]")
+        except (
+            queries.IndexMissing,
+            queries.IndexStale,
+            sqlite3.OperationalError,
+            sqlite3.DatabaseError,
+        ) as e:
+            bl.update(
+                Text.from_markup(f"[red]backlinks unavailable: {e}[/red]")
+            )
             return
         if not results:
-            bl.update("[dim](no backlinks)[/dim]")
+            bl.update(Text("(no backlinks)", style="dim italic"))
             return
-        lines = [
-            f"[cyan]{r['page']}[/cyan]: {r['content'][:120]}"
-            for r in results
-        ]
-        bl.update("\n".join(lines))
+        lines: list[Text] = []
+        for r in results:
+            line = Text()
+            line.append(r["page"], style="cyan")
+            line.append(": ")
+            line.append(r["content"][:120])
+            lines.append(line)
+        bl.update(Text("\n").join(lines))
 
     # --- vim navigation actions ---
 
@@ -279,10 +300,13 @@ class MainScreen(Screen):
         self.query_one("#page-filter", Input).focus()
 
     def action_blur_filter(self) -> None:
+        if self._filter_timer is not None:
+            self._filter_timer.stop()
+            self._filter_timer = None
         self.query_one("#page-list", ListView).focus()
 
     def action_refresh_pages(self) -> None:
-        self.all_pages = list_pages(self.vault)
+        self.all_pages = list_pages(self.vault, include_journals=self.show_journals)
         self._populate_list(self._visible_pages())
 
     def action_search_modal(self) -> None:

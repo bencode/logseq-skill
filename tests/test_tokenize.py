@@ -22,9 +22,9 @@ def test_tokenize_for_index_inserts_spaces_at_word_boundaries() -> None:
 
 
 def test_tokenize_for_index_keeps_ascii_words_intact() -> None:
-    out = tokenize_for_index("trantor 维护 的 issue")
+    out = tokenize_for_index("myapp 维护 的 issue")
     parts = out.split()
-    assert "trantor" in parts
+    assert "myapp" in parts
     assert "维护" in parts
 
 
@@ -122,11 +122,11 @@ def test_search_finds_block_ref_uuid(
     (vault / "logseq" / "config.edn").write_text("{}", encoding="utf-8")
     (vault / "pages").mkdir()
     (vault / "pages" / "Notes.md").write_text(
-        "- trantor 维护问题\n- feynman 物理课\n", encoding="utf-8"
+        "- myapp 维护问题\n- feynman 物理课\n", encoding="utf-8"
     )
     reindex(vault)
 
-    hits_en = search(vault, "trantor")
+    hits_en = search(vault, "myapp")
     assert len(hits_en) == 1
     hits_cn = search(vault, "维护")
     assert len(hits_cn) == 1

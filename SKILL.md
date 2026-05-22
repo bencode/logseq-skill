@@ -30,7 +30,7 @@ Remember the path within the conversation — don't re-detect for every call.
 
 When you show the user a list of pages, blocks, or search hits, **format every reference as a clickable `logseq://` URL** so the user can `Cmd+Click` in their terminal to jump straight to the visual Logseq desktop UI for that exact page or block. The user has confirmed: their primary visual reader is Logseq desktop; the CLI/Claude side handles search/analysis/writes, and the URL bridges the two.
 
-URL templates (`<graph>` is the basename of the vault directory, e.g. `bcd-new` for `/Users/bencode/Documents/bcd-new`):
+URL templates (`<graph>` is the basename of the vault directory, e.g. `mynotes` for `~/Documents/mynotes`):
 
 ```
 logseq://graph/<graph>?page=<url-encoded-page-name>
@@ -39,12 +39,12 @@ logseq://graph/<graph>?block-id=<block-uuid>
 
 Use Python's `urllib.parse.quote` (or shell-side `python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))"`) to URL-encode page names — they often contain Chinese / spaces / `/` namespace separators.
 
-Output as markdown links. Example after a `logseq search 写作 vault`:
+Output as markdown links. Example after a `logseq search standup vault`:
 
 ```
-- [写作训练营](logseq://graph/bcd-new?page=%E5%86%99%E4%BD%9C%E8%AE%AD%E7%BB%83%E8%90%A5) — 职场写作和文学写作的区别
-- [年度计划](logseq://graph/bcd-new?page=%E5%B9%B4%E5%BA%A6%E8%AE%A1%E5%88%92) — 英文写作
-- [2023_02_25](logseq://graph/bcd-new?page=2023_02_25) — 整理 [[写作训练营]]
+- [Daily Standup](logseq://graph/mynotes?page=Daily%20Standup) — yesterday's blockers
+- [Project Plan](logseq://graph/mynotes?page=Project%20Plan) — Q3 priorities
+- [2026_05_22](logseq://graph/mynotes?page=2026_05_22) — today's journal, mentions [[Daily Standup]]
 ```
 
 For block-specific results (when `search` / `backlinks` / `todos` returns a `uuid` field that's NOT an `auto:...` synthetic), use `?block-id=<uuid>` so Logseq opens directly to that block. For `auto:<hash>` uuids (parser-generated, not stored in the file), fall back to `?page=<page-name>`.
@@ -134,7 +134,7 @@ FTS5 full-text search across all blocks in the vault.
 ### `logseq backlinks <name> <vault> [--limit N] [--case-sensitive] [--include-bare]`
 Find blocks linking to a given page (`[[name]]` references).
 - Default `--limit 50`
-- Case-insensitive by default (matches `[[Trantor]]` when querying `trantor`); pass `--case-sensitive` for exact match
+- Case-insensitive by default (matches `[[MyProject]]` when querying `myproject`); pass `--case-sensitive` for exact match
 - **Bare tag-only blocks** (content is literally just `[[name]]`, a common Logseq idiom for daily status markers) are filtered out by default to surface substantive backlinks. Pass `--include-bare` to see them too.
 - Only page refs (`kind='page'`); block refs (`((uuid))`) not yet covered
 - Output: JSON array `[{page, uuid, content}, ...]`
@@ -218,8 +218,8 @@ logseq parse /path/.../Feynman.md
 logseq stats /path/to/vault           # pre-check: index built + not stale?
 logseq search 'X' /path/to/vault      # → array of {page, uuid, content}
 
-# User: "谁链接到我的 trantor 这一页"
-logseq backlinks trantor /path/to/vault
+# User: "谁链接到我的 myproject 这一页"
+logseq backlinks myproject /path/to/vault
 
 # User: "我现在有哪些 TODO"
 logseq todos /path/to/vault --limit 20

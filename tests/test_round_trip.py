@@ -10,9 +10,11 @@ from logseq.parser import parse
 from logseq.serializer import serialize
 
 FIXTURES = Path(__file__).parent / "fixtures"
-VAULT_PATH = Path(
-    os.environ.get("LOGSEQ_VAULT", "/Users/bencode/Documents/bcd-new")
-)
+# Real-vault corpus regression: set LOGSEQ_VAULT to a directory containing
+# `journals/` and/or `pages/` to enable ~1100 additional round-trip tests
+# across real .md files. No fallback default — the corpus tests skip when
+# the env var is unset.
+VAULT_PATH = Path(os.environ["LOGSEQ_VAULT"]) if os.environ.get("LOGSEQ_VAULT") else None
 
 
 def fixture_files() -> list[Path]:
@@ -20,7 +22,7 @@ def fixture_files() -> list[Path]:
 
 
 def vault_files() -> list[Path]:
-    if not VAULT_PATH.exists():
+    if VAULT_PATH is None or not VAULT_PATH.exists():
         return []
     out: list[Path] = []
     for sub in ("journals", "pages"):

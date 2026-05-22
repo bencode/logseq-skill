@@ -26,13 +26,13 @@ def indexed_vault(vault: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) 
     from logseq import index as index_module
 
     monkeypatch.setattr(index_module, "CACHE_DIR", tmp_path / "cache")
-    (vault / "pages" / "Trantor.md").write_text(
+    (vault / "pages" / "MyProject.md").write_text(
         "- backend framework\n", encoding="utf-8"
     )
     (vault / "pages" / "Use.md").write_text(
-        "- using [[Trantor]] for prototyping\n"
-        "- TODO read [[Trantor]] docs\n"
-        "- DOING setup [[Trantor]]\n",
+        "- using [[MyProject]] for prototyping\n"
+        "- TODO read [[MyProject]] docs\n"
+        "- DOING setup [[MyProject]]\n",
         encoding="utf-8",
     )
     (vault / "journals" / "2024_01_15.md").write_text(
@@ -53,8 +53,8 @@ def test_search_returns_matching_blocks(indexed_vault: Path) -> None:
 
 
 def test_search_respects_limit(indexed_vault: Path) -> None:
-    # 3 blocks contain "Trantor" or "trantor"
-    results = search(indexed_vault, "trantor", limit=2)
+    # 3 blocks contain "MyProject" or "myproject"
+    results = search(indexed_vault, "myproject", limit=2)
     assert len(results) == 2
 
 
@@ -67,28 +67,28 @@ def test_search_phrase_syntax(indexed_vault: Path) -> None:
 
 
 def test_backlinks_returns_referrers(indexed_vault: Path) -> None:
-    results = backlinks(indexed_vault, "Trantor")
+    results = backlinks(indexed_vault, "MyProject")
     pages = {r["page"] for r in results}
     assert pages == {"use"}
     assert len(results) == 3
 
 
 def test_backlinks_case_insensitive_by_default(indexed_vault: Path) -> None:
-    upper = backlinks(indexed_vault, "TRANTOR")
-    lower = backlinks(indexed_vault, "trantor")
+    upper = backlinks(indexed_vault, "MYPROJECT")
+    lower = backlinks(indexed_vault, "myproject")
     assert len(upper) == 3
     assert len(lower) == 3
 
 
 def test_backlinks_case_sensitive_flag(indexed_vault: Path) -> None:
-    # All refs stored as 'Trantor' (the bracketed form). Case-sensitive 'trantor' = 0 hits.
-    assert backlinks(indexed_vault, "trantor", case_sensitive=True) == []
-    assert len(backlinks(indexed_vault, "Trantor", case_sensitive=True)) == 3
+    # All refs stored as 'MyProject' (the bracketed form). Case-sensitive 'myproject' = 0 hits.
+    assert backlinks(indexed_vault, "myproject", case_sensitive=True) == []
+    assert len(backlinks(indexed_vault, "MyProject", case_sensitive=True)) == 3
 
 
 def test_todos_default_marker_is_todo(indexed_vault: Path) -> None:
     results = todos(indexed_vault)
-    assert len(results) == 2  # "read [[Trantor]] docs" and "write notes on quantum"
+    assert len(results) == 2  # "read [[MyProject]] docs" and "write notes on quantum"
     assert all("read" in r["content"] or "write" in r["content"] for r in results)
 
 
@@ -149,21 +149,21 @@ def test_search_snippet_field(
 
 def test_backlinks_skips_bare_tags_by_default(indexed_vault: Path) -> None:
     bare_path = indexed_vault / "pages" / "BareRef.md"
-    bare_path.write_text("- [[Trantor]]\n", encoding="utf-8")
+    bare_path.write_text("- [[MyProject]]\n", encoding="utf-8")
     reindex(indexed_vault)
 
-    results = backlinks(indexed_vault, "Trantor")
+    results = backlinks(indexed_vault, "MyProject")
     pages = {r["page"] for r in results}
-    assert "bareref" not in pages  # bare [[Trantor]] filtered out
+    assert "bareref" not in pages  # bare [[MyProject]] filtered out
     assert "use" in pages           # substantive blocks kept
 
 
 def test_backlinks_include_bare_flag(indexed_vault: Path) -> None:
     bare_path = indexed_vault / "pages" / "BareRef.md"
-    bare_path.write_text("- [[Trantor]]\n", encoding="utf-8")
+    bare_path.write_text("- [[MyProject]]\n", encoding="utf-8")
     reindex(indexed_vault)
 
-    results = backlinks(indexed_vault, "Trantor", include_bare=True)
+    results = backlinks(indexed_vault, "MyProject", include_bare=True)
     pages = {r["page"] for r in results}
     assert "bareref" in pages
     assert "use" in pages

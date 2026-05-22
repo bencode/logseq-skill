@@ -1,0 +1,74 @@
+Screen {
+    background: $surface;
+}
+
+#main-layout {
+    height: 1fr;
+}
+
+#left {
+    width: 30;
+    border-right: tall $primary-darken-2;
+    padding: 0 1;
+}
+
+#right {
+    width: 1fr;
+}
+
+#page-list {
+    height: 1fr;
+}
+
+#view-panel {
+    height: 2fr;
+    border: round $primary-darken-2;
+    padding: 0 1;
+    overflow-y: auto;
+}
+
+#backlinks-panel {
+    height: 1fr;
+    border: round $primary-darken-2;
+    padding: 0 1;
+    overflow-y: auto;
+}
+
+#page-filter {
+    height: 3;
+    margin: 0;
+}
+
+.title {
+    color: $accent;
+    text-style: bold;
+    padding: 0 1;
+}
+
+ModalScreen {
+    align: center middle;
+}
+
+#search-modal {
+    width: 80;
+    height: 24;
+    border: thick $accent;
+    background: $surface;
+    padding: 1;
+}
+
+#search-input {
+    height: 3;
+}
+
+#search-results {
+    height: 1fr;
+}
+
+#todos-modal {
+    width: 100;
+    height: 30;
+    border: thick $accent;
+    background: $surface;
+    padding: 1;
+}

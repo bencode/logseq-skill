@@ -72,6 +72,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_view.add_argument("vault", help="Logseq vault (with logseq/config.edn)")
 
+    p_tui = sub.add_parser("tui", help="Launch the Textual TUI browser")
+    p_tui.add_argument("vault", help="Logseq vault (with logseq/config.edn)")
+
     args = p.parse_args(argv)
 
     if args.cmd == "parse":
@@ -99,6 +102,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_todos(args.vault, args.marker, args.page, args.limit)
     if args.cmd == "view":
         return _cmd_view(args.name, args.vault)
+    if args.cmd == "tui":
+        return _cmd_tui(args.vault)
     return 2
 
 
@@ -235,6 +240,19 @@ def _cmd_todos(vault: str, marker: str, page: str | None, limit: int) -> int:
     return _run_query(
         lambda: todos(Path(vault), marker=marker, page=page, limit=limit)
     )
+
+
+def _cmd_tui(vault: str) -> int:
+    try:
+        from .tui.app import run
+    except ImportError as e:
+        print(
+            f"error: TUI requires `pip install -e \".[tui]\"` "
+            f"(missing: {e.name})",
+            file=sys.stderr,
+        )
+        return 2
+    return run(Path(vault))
 
 
 def _cmd_view(name: str, vault: str) -> int:

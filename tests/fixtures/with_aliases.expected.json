@@ -1,0 +1,9 @@
+{
+  "title": "with_aliases",
+  "type": "page",
+  "aliases": ["foo", "bar baz"],
+  "page_properties": {"alias": "foo, [[bar baz]]"},
+  "blocks": [
+    {"depth": 0, "content": "Body content", "marker": null}
+  ]
+}

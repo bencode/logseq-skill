@@ -1,0 +1,8 @@
+{
+  "page_properties": {},
+  "blocks": [
+    {"depth": 0, "content": "Some code", "refs": []},
+    {"depth": 0, "content": "```python", "refs": []},
+    {"depth": 0, "content": "After fence", "refs": []}
+  ]
+}

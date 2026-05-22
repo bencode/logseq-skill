@@ -1,0 +1,10 @@
+{
+  "type": "page",
+  "page_properties": {},
+  "blocks": [
+    {"depth": 0, "content": "Write docs", "marker": "TODO", "properties_keys": []},
+    {"depth": 0, "content": "Code review", "marker": "DOING", "properties_keys": []},
+    {"depth": 0, "content": "Ship feature", "marker": "DONE", "properties_keys": []},
+    {"depth": 0, "content": "Normal block", "marker": null, "properties_keys": []}
+  ]
+}

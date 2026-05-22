@@ -1,0 +1,8 @@
+{
+  "page_properties": {},
+  "blocks": [
+    {"depth": 0, "content": "Hello world", "parent_index": null, "sibling_order": 0, "has_explicit_id": false, "marker": null, "properties_keys": [], "refs": []},
+    {"depth": 0, "content": "Second bullet", "parent_index": null, "sibling_order": 1, "has_explicit_id": false, "marker": null, "properties_keys": [], "refs": []},
+    {"depth": 0, "content": "Third", "parent_index": null, "sibling_order": 2, "has_explicit_id": false, "marker": null, "properties_keys": [], "refs": []}
+  ]
+}

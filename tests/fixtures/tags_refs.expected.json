@@ -1,0 +1,22 @@
+{
+  "page_properties": {"Keywords": "#[[topic]] #single"},
+  "blocks": [
+    {
+      "depth": 0,
+      "content": "Block with [[page link]] and #[[bracketed tag]] and #bare",
+      "refs": [
+        {"kind": "tag", "target": "bracketed tag"},
+        {"kind": "page", "target": "page link"},
+        {"kind": "tag", "target": "bare"}
+      ]
+    },
+    {
+      "depth": 0,
+      "content": "Just #more #tags",
+      "refs": [
+        {"kind": "tag", "target": "more"},
+        {"kind": "tag", "target": "tags"}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "page_properties": {},
+  "blocks": [
+    {
+      "depth": 0,
+      "content": "First block",
+      "has_explicit_id": true,
+      "explicit_id": "11111111-2222-3333-4444-555555555555",
+      "properties_keys": ["id"],
+      "refs": []
+    },
+    {
+      "depth": 0,
+      "content": "Reference to ((11111111-2222-3333-4444-555555555555))",
+      "has_explicit_id": false,
+      "properties_keys": [],
+      "refs": [
+        {"kind": "block", "target": "11111111-2222-3333-4444-555555555555"}
+      ]
+    },
+    {
+      "depth": 0,
+      "content": "Embed: {{embed ((11111111-2222-3333-4444-555555555555))}}",
+      "has_explicit_id": false,
+      "properties_keys": [],
+      "refs": [
+        {"kind": "embed", "target": "11111111-2222-3333-4444-555555555555"}
+      ]
+    }
+  ]
+}

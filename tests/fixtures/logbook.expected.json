@@ -1,0 +1,8 @@
+{
+  "page_properties": {},
+  "type": "page",
+  "blocks": [
+    {"depth": 0, "content": "Some task", "marker": "TODO", "properties_keys": []},
+    {"depth": 0, "content": "Another task", "marker": "DONE", "properties_keys": []}
+  ]
+}

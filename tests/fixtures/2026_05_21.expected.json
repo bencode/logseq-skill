@@ -1,0 +1,14 @@
+{
+  "title": "2026_05_21",
+  "type": "journal",
+  "journal_day": 20260521,
+  "namespace_parent": null,
+  "aliases": [],
+  "page_properties": {},
+  "blocks": [
+    {"depth": 0, "content": "Work", "marker": null},
+    {"depth": 1, "content": "[[tcollab]]", "parent_index": 0, "refs": [{"kind": "page", "target": "tcollab"}]},
+    {"depth": 0, "content": "Learn", "marker": null},
+    {"depth": 0, "content": "Discovery", "marker": null}
+  ]
+}

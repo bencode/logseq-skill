@@ -1,0 +1,10 @@
+{
+  "page_properties": {},
+  "blocks": [
+    {"depth": 0, "content": "Top", "parent_index": null, "sibling_order": 0},
+    {"depth": 1, "content": "Child 1", "parent_index": 0, "sibling_order": 0},
+    {"depth": 2, "content": "Grand 1", "parent_index": 1, "sibling_order": 0},
+    {"depth": 1, "content": "Child 2", "parent_index": 0, "sibling_order": 1},
+    {"depth": 0, "content": "Top 2", "parent_index": null, "sibling_order": 1}
+  ]
+}

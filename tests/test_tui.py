@@ -414,6 +414,47 @@ async def test_ctrl_o_jumps_back_through_history(indexed_vault: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_clicking_page_ref_in_view_dispatches_jump(indexed_vault: Path) -> None:
+    """REAL pipeline test: an actual mouse click on a rendered `[[X]]` span
+    in the view panel must dispatch through Textual's @click meta → broker →
+    action namespace resolution → MainScreen.action_jump_page. Stage 5l's
+    direct Python calls to action_jump_page bypassed this and missed the
+    namespace bug that left mouse-click silently broken."""
+    app = LogseqTUI(indexed_vault)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause(0.2)
+        screen: MainScreen = app.screen  # type: ignore[assignment]
+        # Navigate to Alpha (which contains "[[Beta]]"). _do_render_current
+        # bakes screen.jump_page('Beta') into the @click meta of that span.
+        alpha = next(p for p in screen.all_pages if p.title == "Alpha")
+        screen.current = alpha
+        await pilot.pause(0.2)
+
+        # Find the screen coordinate of the [[Beta]] span by scanning the
+        # view-panel region for the @click meta.
+        view = screen.query_one("#view-panel")
+        region = view.region
+        target_xy = None
+        for y in range(region.y, region.y + region.height):
+            for x in range(region.x, region.x + region.width):
+                meta = screen.get_style_at(x, y).meta
+                if "Beta" in (meta.get("@click") or ""):
+                    target_xy = (x, y)
+                    break
+            if target_xy is not None:
+                break
+        assert target_xy is not None, "no [[Beta]] @click span found in view"
+
+        # The actual click — this is what was silently broken pre-fix
+        await pilot.click(offset=target_xy)
+        await pilot.pause(0.2)
+        assert screen.current is not None
+        assert screen.current.name == "beta", (
+            f"click did not jump; current is {screen.current.name!r}"
+        )
+
+
+@pytest.mark.asyncio
 async def test_jump_to_block_enters_zoom_mode(indexed_vault: Path) -> None:
     """Block jump enters Logseq-style zoom: view shows only the target +
     its descendants, with a breadcrumb header."""

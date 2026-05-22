@@ -464,10 +464,18 @@ class MainScreen(Screen):
 
 def _ref_action(kind: str, target: str) -> str | None:
     """Build the @click action string for a ref. Page/tag refs jump to the
-    page; block/embed refs jump to the page containing the block."""
+    page; block/embed refs jump to the page containing the block.
+
+    The `screen.` prefix is REQUIRED — Textual's action dispatcher does not
+    walk up the DOM tree. Without the prefix, the action target defaults to
+    the Static widget that received the click, which has no action_jump_*
+    method, and the click silently no-ops. `screen.` routes to App.screen
+    (= MainScreen), where the action methods actually live.
+
+    See textual/app.py:_action_targets = {"app", "screen", "focused"}."""
     # repr() handles single-quote escaping for targets containing apostrophes
     if kind in ("page", "tag"):
-        return f"jump_page({target!r})"
+        return f"screen.jump_page({target!r})"
     if kind in ("block", "embed"):
-        return f"jump_block({target!r})"
+        return f"screen.jump_block({target!r})"
     return None

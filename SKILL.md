@@ -95,6 +95,9 @@ Find blocks linking to a given page (`[[name]]` references).
 - Output: JSON array `[{page, uuid, content}, ...]`
 - Exit codes: same as `search`
 
+### `logseq tui <vault> [--theme NAME]`
+Launch the Textual TUI browser (full-screen, keyboard-driven). Default theme `catppuccin-mocha`; other built-ins: `monokai`, `nord`, `gruvbox`, `dracula`, `tokyo-night`, `flexoki`, `catppuccin-latte`, `solarized-light`, `textual-dark`, `textual-light`, `textual-ansi`. Press `Ctrl+P` inside the TUI to live-swap themes via the command palette. Bindings inside: `j/k` navigate page list, `/` focus filter, `Ctrl+F` FTS modal, `t` TODOs modal, `Ctrl+R` refresh, `q` quit.
+
 ### `logseq view <name> <vault>`
 Pretty-print a page to stdout with Rich (colored refs, tags, markers; nested block tree). Use this **whenever you want to show the user a page** — much better than dumping `parse` JSON or raw markdown.
 - `<name>` resolves in this order: `"today"` → today's journal; `YYYY-MM-DD` → that journal; path containing `/` or ending `.md` → file directly; else page-name lookup (exact then substring).

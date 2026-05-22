@@ -8,7 +8,7 @@ Screen {
 
 #left {
     width: 30;
-    border-right: tall $primary-darken-2;
+    border-right: tall $accent;
     padding: 0 1;
 }
 
@@ -22,14 +22,14 @@ Screen {
 
 #view-panel {
     height: 2fr;
-    border: round $primary-darken-2;
+    border: round $accent;
     padding: 0 1;
     overflow-y: auto;
 }
 
 #backlinks-panel {
     height: 1fr;
-    border: round $primary-darken-2;
+    border: round $accent;
     padding: 0 1;
     overflow-y: auto;
 }

@@ -74,6 +74,11 @@ def main(argv: list[str] | None = None) -> int:
 
     p_tui = sub.add_parser("tui", help="Launch the Textual TUI browser")
     p_tui.add_argument("vault", help="Logseq vault (with logseq/config.edn)")
+    p_tui.add_argument(
+        "--theme", default="catppuccin-mocha",
+        help="Textual theme name (catppuccin-mocha, monokai, nord, "
+             "gruvbox, dracula, tokyo-night, textual-dark, ...)",
+    )
 
     args = p.parse_args(argv)
 
@@ -103,7 +108,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "view":
         return _cmd_view(args.name, args.vault)
     if args.cmd == "tui":
-        return _cmd_tui(args.vault)
+        return _cmd_tui(args.vault, args.theme)
     return 2
 
 
@@ -242,7 +247,7 @@ def _cmd_todos(vault: str, marker: str, page: str | None, limit: int) -> int:
     )
 
 
-def _cmd_tui(vault: str) -> int:
+def _cmd_tui(vault: str, theme: str) -> int:
     try:
         from .tui.app import run
     except ImportError as e:
@@ -252,7 +257,7 @@ def _cmd_tui(vault: str) -> int:
             file=sys.stderr,
         )
         return 2
-    return run(Path(vault))
+    return run(Path(vault), theme=theme)
 
 
 def _cmd_view(name: str, vault: str) -> int:

@@ -18,11 +18,13 @@ class LogseqTUI(App):
         Binding("q", "quit", "Quit", priority=True),
     ]
 
-    def __init__(self, vault: Path) -> None:
+    def __init__(self, vault: Path, theme: str = "catppuccin-mocha") -> None:
         super().__init__()
         self.vault = vault.expanduser().resolve()
+        self._initial_theme = theme
 
     def on_mount(self) -> None:
+        self.theme = self._initial_theme
         status = _check_index(self.vault)
         if status == "missing":
             self.exit(
@@ -55,13 +57,13 @@ def _check_index(vault: Path) -> str:
     return "stale" if needs else "ok"
 
 
-def run(vault: Path) -> int:
+def run(vault: Path, theme: str = "catppuccin-mocha") -> int:
     try:
         vault = vault.expanduser().resolve()
         validate_vault(vault)
     except ValueError as e:
         print(f"error: {e}")
         return 2
-    app = LogseqTUI(vault)
+    app = LogseqTUI(vault, theme=theme)
     app.run()
     return app.return_code or 0

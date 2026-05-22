@@ -10,9 +10,12 @@ A small CLI of atomic Logseq operations. You (Claude) compose them in response t
 
 ## CLI invocation
 
-Throughout this skill, `logseq` refers to the absolute path
-`~/.claude/skills/logseq-skill/.venv/bin/logseq`. Use that absolute path
-when running Bash commands — the venv binary is not on global PATH.
+Throughout this skill, `logseq` refers to the venv binary inside the skill
+install. For Claude Code's canonical install path that's
+`~/.claude/skills/logseq-skill/.venv/bin/logseq`. For other agents (Codex,
+Cursor, etc.) it's `<install-dir>/.venv/bin/logseq` — wherever the user
+cloned the repo. Use the absolute path when running Bash commands; the
+venv binary is not on global PATH.
 
 ## 1. Find a Logseq directory
 
@@ -60,16 +63,17 @@ DB-backed query (`search`, `backlinks`, `todos`, `stats`), run
 changed; ~1.3s on first build of a ~1000-file vault), so the cost is
 invisible to the user but guarantees their latest edits are visible.
 
-Skip this for commands that read files directly: `view`, `parse`,
-`page`, `journal`, `find-page`. They bypass the index entirely.
+Skip this for commands that read files directly: `parse`, `page`,
+`journal`, `find-page`. They bypass the index entirely.
 
-For commands that write (`capture`, `append`), reindex runs
-automatically post-write — no manual call needed.
+For writes (your `Edit` / `Write` on the .md file directly — there's no
+write CLI), run `logseq index <vault>` afterward so subsequent DB-backed
+queries see the change. Same incremental cost.
 
 Rough rule:
 - Need fresh DB? → reindex first
-- Reading a file directly? → no reindex
-- Writing? → already handled
+- Reading a single file directly (parse / Read)? → no reindex
+- After writing? → reindex once before the next DB-backed query
 
 ## 2. Atomic commands
 
@@ -127,7 +131,7 @@ FTS5 full-text search across all blocks in the vault.
 - Results ranked by BM25 relevance (lower score = better)
 - `--snippet` adds a `snippet` field per result with `«matched»` highlights and `...` context truncation
 - `--min-len N` filters out blocks shorter than N chars. **Crucial knob for tag-heavy vaults**: BM25 favors short blocks (high term-frequency / length ratio), so bare `[[X]]` tag-blocks often dominate without this filter. Try `--min-len 25` for "substantive" results.
-- CJK is tokenized per-codepoint (unicode61 limitation); phrase search across CJK characters works but single-word lookup is approximate
+- **CJK is tokenized by `jieba`** in search mode (`cut_for_search`): the index stores compound words and their constituent sub-words, so `数学` correctly finds blocks containing `数学女孩`, AND `学生` correctly does NOT match `数学生活` (jieba splits as 数学/生活, not 数/学/生/活). User queries are jieba-tokenized the same way; FTS5 operators (`AND` / `OR` / `NOT` / `"..."` phrases) pass through unchanged.
 - Output: JSON array `[{page, uuid, content, snippet?}, ...]`
 - Exit codes: 0 success (even with empty results); 3 if no index for vault; 4 if index stale
 
@@ -245,7 +249,7 @@ What we DO:
 
 What we explicitly DON'T do (by design — Logseq desktop does these well):
 - No TUI / no terminal-side block editing UI
-- No write CLI (`capture`/`append` removed in Stage 7 — Claude uses Read+Edit; user uses Logseq desktop)
+- No write CLI — Claude uses Read+Edit on the .md files; user does heavier editing in Logseq desktop
 - No markdown rendering server / browser preview
 - No sync, no whiteboard, no graph view, no editor
 

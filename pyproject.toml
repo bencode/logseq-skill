@@ -1,8 +1,10 @@
 [project]
 name = "logseq-skill"
 version = "0.1.0"
-description = "Parser, indexer, and writer for Logseq markdown vaults — Claude Code skill foundation."
+description = "LLM-powered query layer for Logseq vaults (SQLite + FTS5 + jieba). Claude Code skill."
 requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
 dependencies = ["jieba>=0.42"]
 
 [project.optional-dependencies]

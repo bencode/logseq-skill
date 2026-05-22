@@ -14,6 +14,7 @@ def cmd_view(name: str, vault: str) -> int:
         print(f"error: {e}", file=sys.stderr)
         return 5
     from rich.console import Console
+
     from ..parser import parse
     from ..render import render_page
     # utf-8-sig handles Windows-edited files with BOM transparently

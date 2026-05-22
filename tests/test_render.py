@@ -57,10 +57,10 @@ def test_render_marker_visible() -> None:
 def test_render_nested_indent() -> None:
     page = parse("- parent\n\t- child\n\t\t- grandchild\n", "/tmp/X.md")
     out = _render_to_text(page)
-    # Grandchild should be indented more than parent
-    parent_indent = out.index("parent") - out.index("\n", out.index("parent") - 100) - 1
-    gc_line = out[out.index("grandchild") - 20:out.index("grandchild")]
-    assert "    " in gc_line  # at least two levels of "  " indent
+    # Direct prefix-based ordering check: depth 0 / 1 / 2 = 0 / 2 / 4 spaces
+    assert "- parent" in out
+    assert "  - child" in out
+    assert "    - grandchild" in out
 
 
 def test_render_empty_page_shows_placeholder() -> None:

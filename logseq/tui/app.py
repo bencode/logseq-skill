@@ -9,7 +9,6 @@ from textual.theme import Theme
 from ..index import db_path_for, needs_rebuild, validate_vault
 from .main import MainScreen
 
-
 LOGSEQ_BLACK = Theme(
     name="logseq-black",
     primary="#7aa2f7",          # soft blue for highlights

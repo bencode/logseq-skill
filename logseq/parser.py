@@ -185,7 +185,7 @@ def _build_block(
         has_explicit_id = True
     else:
         digest = hashlib.sha1(
-            f"{file_path}:{line_start}:{raw_content}".encode("utf-8")
+            f"{file_path}:{line_start}:{raw_content}".encode()
         ).hexdigest()[:12]
         block_uuid = f"auto:{digest}"
         has_explicit_id = False

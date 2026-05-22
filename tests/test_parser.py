@@ -46,7 +46,7 @@ def test_fixture_semantics(name: str, md_path: Path, expected_path: Path) -> Non
         f"block count mismatch in {name}: got {len(page.blocks)} expected {len(expected_blocks)}"
     )
 
-    for i, (got, want) in enumerate(zip(page.blocks, expected_blocks)):
+    for i, (got, want) in enumerate(zip(page.blocks, expected_blocks, strict=False)):
         loc = f"{name}[{i}]"
         if "depth" in want:
             assert got.depth == want["depth"], f"{loc} depth"

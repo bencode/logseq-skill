@@ -66,10 +66,22 @@ See `SKILL.md` for the JSON contract.
 
 ```bash
 .venv/bin/pytest -q
-# parser + serializer + round-trip + CLI; ~1158 tests in ~1s
+# parser + serializer + round-trip + CLI + TUI; ~1229 tests in ~9s
 ```
 
-If `LOGSEQ_VAULT` env var or `/Users/bencode/Documents/bcd-new` exists, an additional 1122 round-trip tests run against that real vault to catch parser regressions.
+If `LOGSEQ_VAULT` env var or `/Users/bencode/Documents/bcd-new` exists, an additional ~1100 round-trip tests run against that real vault to catch parser regressions.
+
+## Lint
+
+Ruff is the only lint/format tool (config in `pyproject.toml [tool.ruff]`).
+
+```bash
+.venv/bin/ruff check .              # lint
+.venv/bin/ruff check --fix .        # auto-fix safe issues
+.venv/bin/ruff format .             # format (opinionated; not yet adopted)
+```
+
+Enabled rule families: pycodestyle (E/W), pyflakes (F), isort (I), pyupgrade (UP), bugbear (B), simplify (SIM), ruff-specific (RUF). `TID252` (relative-import warning) is intentionally not enabled — relative imports inside a package are idiomatic. Textual `BINDINGS = [...]` is per-file-ignored for `RUF012` (mutable class default) since it's a framework declarative convention.
 
 ## Status
 

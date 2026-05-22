@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from logseq.index import db_path_for, reindex
+from logseq.index import reindex
 from logseq.stats import stats
 
 
@@ -289,7 +289,7 @@ def test_stats_returns_broken_shape_on_corrupt_db(
     s = stats(vault, db_path=db_path)
     assert s["db_exists"] is True
     assert s["valid"] is False
-    assert "error" in s and s["error"]
+    assert s.get("error")
     # corruption was NOT silently auto-fixed by stats (file still garbage)
     assert db_path.read_bytes().startswith(b"\x00\x01garbage")
 

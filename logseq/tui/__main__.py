@@ -5,7 +5,6 @@ from pathlib import Path
 
 from .app import run
 
-
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("usage: python -m logseq.tui <vault>", file=sys.stderr)

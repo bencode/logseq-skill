@@ -75,9 +75,9 @@ def main(argv: list[str] | None = None) -> int:
     p_tui = sub.add_parser("tui", help="Launch the Textual TUI browser")
     p_tui.add_argument("vault", help="Logseq vault (with logseq/config.edn)")
     p_tui.add_argument(
-        "--theme", default="catppuccin-mocha",
-        help="Textual theme name (catppuccin-mocha, monokai, nord, "
-             "gruvbox, dracula, tokyo-night, textual-dark, ...)",
+        "--theme", default="textual-dark",
+        help="Initial theme name. Press T inside the TUI to live-preview "
+             "all available themes (12 built-in + logseq-black + logseq-white).",
     )
 
     args = p.parse_args(argv)

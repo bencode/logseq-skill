@@ -96,7 +96,7 @@ Find blocks linking to a given page (`[[name]]` references).
 - Exit codes: same as `search`
 
 ### `logseq tui <vault> [--theme NAME]`
-Launch the Textual TUI browser (full-screen, keyboard-driven). Default theme `catppuccin-mocha`; other built-ins: `monokai`, `nord`, `gruvbox`, `dracula`, `tokyo-night`, `flexoki`, `catppuccin-latte`, `solarized-light`, `textual-dark`, `textual-light`, `textual-ansi`. Press `Ctrl+P` inside the TUI to live-swap themes via the command palette. Bindings inside: `j/k` navigate page list, `/` focus filter, `Ctrl+F` FTS modal, `t` TODOs modal, `Ctrl+R` refresh, `q` quit.
+Launch the Textual TUI browser (full-screen, keyboard-driven). Default theme `textual-dark`. 14 themes available: 12 Textual built-ins (`monokai`, `nord`, `gruvbox`, `dracula`, `tokyo-night`, `flexoki`, `catppuccin-mocha`, `catppuccin-latte`, `solarized-light`, `textual-dark`, `textual-light`, `textual-ansi`) plus 2 custom (`logseq-black` for pure-black bg, `logseq-white` for pure-white bg). Bindings inside: `j/k` navigate page list, `/` focus filter, `Ctrl+F` FTS modal, `t` TODOs modal, `T` theme picker with **live preview** (↑↓ to preview, Enter to apply, Esc to revert+close), `Ctrl+R` refresh, `Ctrl+P` built-in command palette, `q` quit.
 
 ### `logseq view <name> <vault>`
 Pretty-print a page to stdout with Rich (colored refs, tags, markers; nested block tree). Use this **whenever you want to show the user a page** — much better than dumping `parse` JSON or raw markdown.

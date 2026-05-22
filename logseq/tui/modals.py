@@ -6,7 +6,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
 from textual.screen import ModalScreen
-from textual.widgets import DataTable, Input, Label, Select
+from textual.widgets import DataTable, Input, Label, ListItem, ListView, Select
 
 from .. import queries
 
@@ -85,3 +85,37 @@ class TodosModal(ModalScreen):
             return
         for r in results:
             table.add_row(r["page"], r["content"][:200])
+
+
+class ThemePicker(ModalScreen):
+    BINDINGS = [Binding("escape", "dismiss", "Close")]
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="theme-modal"):
+            yield Label("Pick a theme  (↑↓ preview · Enter apply · Esc close)", classes="title")
+            yield ListView(id="theme-list")
+
+    def on_mount(self) -> None:
+        lv = self.query_one("#theme-list", ListView)
+        names = sorted(self.app.available_themes.keys())
+        current = self.app.theme
+        current_idx = 0
+        for i, name in enumerate(names):
+            label = f"  {name}"
+            if name == current:
+                label = f"▸ {name}"
+                current_idx = i
+            lv.append(ListItem(Label(label)))
+        lv.index = current_idx
+        lv.focus()
+
+    def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:
+        """Live-preview as user navigates."""
+        names = sorted(self.app.available_themes.keys())
+        idx = event.list_view.index
+        if idx is not None and 0 <= idx < len(names):
+            self.app.theme = names[idx]
+
+    def on_list_view_selected(self, event: ListView.Selected) -> None:
+        """Enter closes — preview already applied via highlight."""
+        self.dismiss()

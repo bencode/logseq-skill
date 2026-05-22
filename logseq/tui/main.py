@@ -49,6 +49,7 @@ class MainScreen(Screen):
         Binding("/", "focus_filter", "Filter", show=True),
         Binding("ctrl+f", "search_modal", "Search", show=True),
         Binding("t", "todos_modal", "TODOs", show=True),
+        Binding("T", "theme_picker", "Theme", show=True),
         Binding("escape", "blur_filter", show=False),
         Binding("ctrl+r", "refresh_pages", "Refresh", show=True),
     ]
@@ -172,3 +173,7 @@ class MainScreen(Screen):
     def action_todos_modal(self) -> None:
         from .modals import TodosModal
         self.app.push_screen(TodosModal(self.vault))
+
+    def action_theme_picker(self) -> None:
+        from .modals import ThemePicker
+        self.app.push_screen(ThemePicker())

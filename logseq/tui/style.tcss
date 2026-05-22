@@ -72,3 +72,15 @@ ModalScreen {
     background: $surface;
     padding: 1;
 }
+
+#theme-modal {
+    width: 40;
+    height: 24;
+    border: thick $accent;
+    background: $surface;
+    padding: 1;
+}
+
+#theme-list {
+    height: 1fr;
+}

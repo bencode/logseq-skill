@@ -48,6 +48,7 @@ class MainScreen(Screen):
         Binding("r", "refs_modal", "Refs", show=True),
         Binding("z", "exit_zoom", "Unzoom", show=True),
         Binding("ctrl+o", "back", "Back", show=True),
+        Binding("c", "capture", "Capture", show=True),
         # app actions
         Binding("t", "todos_modal", "TODOs", show=True),
         Binding("T", "theme_picker", "Theme", show=True),
@@ -302,6 +303,26 @@ class MainScreen(Screen):
     def action_theme_picker(self) -> None:
         from .modals import ThemePicker
         self.app.push_screen(ThemePicker())
+
+    def action_capture(self) -> None:
+        from ..writer import FileChangedDuringWrite, append_to_today
+        from .modals import CaptureModal
+
+        def _on_captured(text: str | None) -> None:
+            if not text:
+                return
+            try:
+                path = append_to_today(self.vault, text)
+            except (ValueError, FileChangedDuringWrite) as e:
+                self.notify(f"capture failed: {e}", severity="error")
+                return
+            self.notify(f"captured → {path.name}", severity="information", timeout=2.0)
+            # Refresh page list so the (possibly new) journal shows up,
+            # then jump to it so the user sees what they just wrote.
+            self.action_refresh_pages()
+            self.action_today()
+
+        self.app.push_screen(CaptureModal(), _on_captured)
 
     def action_toggle_journals(self) -> None:
         self.show_journals = not self.show_journals

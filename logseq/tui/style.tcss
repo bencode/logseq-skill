@@ -99,3 +99,15 @@ ModalScreen {
 #ref-list {
     height: 1fr;
 }
+
+#capture-modal {
+    width: 80;
+    height: 8;
+    border: thick $accent;
+    background: $surface;
+    padding: 1;
+}
+
+#capture-input {
+    height: 3;
+}

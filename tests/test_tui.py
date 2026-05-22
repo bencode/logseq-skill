@@ -589,6 +589,64 @@ async def test_r_opens_ref_picker(indexed_vault: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_c_opens_capture_modal_and_writes(indexed_vault: Path) -> None:
+    """Press c → CaptureModal opens → type a string + Enter → block lands
+    in today's journal on disk."""
+    from datetime import date
+
+    from logseq.parser import parse
+    from logseq.tui.modals import CaptureModal
+
+    app = LogseqTUI(indexed_vault)
+    async with app.run_test() as pilot:
+        await pilot.pause(0.2)
+
+        await pilot.press("c")
+        await pilot.pause(0.1)
+        assert isinstance(app.screen, CaptureModal)
+
+        # Type content and submit
+        for ch in "captured via TUI":
+            await pilot.press(ch if ch != " " else "space")
+        await pilot.press("enter")
+        await pilot.pause(0.3)
+
+        # Modal dismissed, we're back on MainScreen
+        assert isinstance(app.screen, MainScreen)
+
+        # Journal file on disk has the line
+        fname = "_".join(date.today().isoformat().split("-")) + ".md"
+        journal = indexed_vault / "journals" / fname
+        assert journal.exists()
+        page = parse(journal.read_text(encoding="utf-8"), str(journal))
+        assert any("captured via TUI" in b.content for b in page.blocks)
+
+
+@pytest.mark.asyncio
+async def test_c_capture_esc_cancels_no_write(indexed_vault: Path) -> None:
+    """Press c then Esc → nothing written."""
+    from datetime import date
+
+    from logseq.tui.modals import CaptureModal
+
+    fname = "_".join(date.today().isoformat().split("-")) + ".md"
+    journal = indexed_vault / "journals" / fname
+    existed_before = journal.exists()
+
+    app = LogseqTUI(indexed_vault)
+    async with app.run_test() as pilot:
+        await pilot.pause(0.2)
+        await pilot.press("c")
+        await pilot.pause(0.1)
+        assert isinstance(app.screen, CaptureModal)
+        await pilot.press("escape")
+        await pilot.pause(0.1)
+
+    # Esc on empty input: no journal should be created (if it didn't exist)
+    assert journal.exists() == existed_before
+
+
+@pytest.mark.asyncio
 async def test_view_panel_is_scrollable_for_long_content(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

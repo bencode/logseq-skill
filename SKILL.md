@@ -116,6 +116,7 @@ Bindings (vim-aligned):
 | `r` | open refs picker (keyboard-friendly list of all refs on current page; selecting a block ref also enters zoom) |
 | `z` | exit block zoom (back to full-page view) |
 | `Ctrl+O` | jump back through navigation history (vim-style); also exits zoom |
+| `c` | open capture modal — type a line, Enter to append to today's journal |
 | `t` | TODOs modal |
 | `T` | theme picker (live preview) |
 | `Ctrl+R` | refresh list |
@@ -128,6 +129,12 @@ Pretty-print a page to stdout with Rich (colored refs, tags, markers; nested blo
 - `<name>` resolves in this order: `"today"` → today's journal; `YYYY-MM-DD` → that journal; path containing `/` or ending `.md` → file directly; else page-name lookup (exact then substring).
 - Requires `pip install -e ".[tui]"` (adds `rich` dep, optional)
 - Exit codes: 0 success; 2 not a vault / bad args; 5 page not found
+
+### `logseq capture <vault> <content> [--marker MARKER]`
+Append a block to today's journal in `<vault>`. Creates the journal file (`journals/YYYY_MM_DD.md`) if missing. Emits the journal path on stdout. Auto-incremental-reindex if an index already exists. Marker examples: `TODO`, `DOING`, `DONE`, `NOW`, `LATER`. **Use this when the user says "remind me to X", "I want to capture Y", or any thought that should go into today's notes**.
+
+### `logseq append <vault> <page> <content> [--marker MARKER]`
+Append a block to an existing page. `<page>` is a page-name (case-insensitive, found in `pages/` or `journals/`), `"today"` (today's journal), or a `.md` file path. Returns the new block's uuid on stdout. Exit code 5 if the page doesn't exist (we don't auto-create non-journal pages).
 
 ### `logseq todos <vault> [--marker M] [--page P] [--limit N]`
 List blocks with a task marker.

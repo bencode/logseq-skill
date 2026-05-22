@@ -99,6 +99,28 @@ class TodosModal(ModalScreen):
             table.add_row(r["page"], r["content"][:200])
 
 
+class CaptureModal(ModalScreen):
+    """Quick capture: type a line, Enter appends to today's journal.
+    Caller's `on_dismiss` receives the captured string (or None on Esc)."""
+
+    BINDINGS = [Binding("escape", "dismiss", "Close")]
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="capture-modal"):
+            yield Label(
+                "Capture → today's journal  (Enter to save · Esc to cancel)",
+                classes="title",
+            )
+            yield Input(placeholder="what's on your mind?", id="capture-input")
+
+    def on_mount(self) -> None:
+        self.query_one("#capture-input", Input).focus()
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        if event.input.id == "capture-input":
+            self.dismiss(event.value.strip() or None)
+
+
 class RefPicker(ModalScreen):
     """List all refs on the current page; ↑↓ to navigate, Enter to jump,
     Esc to cancel. Returns the selected (kind, target, raw) tuple to the

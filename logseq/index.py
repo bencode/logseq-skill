@@ -42,13 +42,16 @@ def reindex(
     db_path: Path | None = None,
 ) -> IndexStats:
     vault_dir = vault_dir.expanduser().resolve()
-    _validate_vault(vault_dir)
+    validate_vault(vault_dir)
     started = time.monotonic()
     target_db = db_path or db_path_for(vault_dir)
     auto_rebuilt = False
-    if not full and target_db.exists() and _needs_rebuild(target_db):
-        full = True
-        auto_rebuilt = True
+    if not full and target_db.exists():
+        needs, reason = needs_rebuild(target_db)
+        if needs:
+            _warn(f"{reason}; will rebuild from vault")
+            full = True
+            auto_rebuilt = True
     working_db = (
         target_db.with_name(target_db.name + ".tmp") if full else target_db
     )
@@ -77,7 +80,7 @@ def reindex(
     )
 
 
-def _needs_rebuild(db_path: Path) -> bool:
+def needs_rebuild(db_path: Path) -> tuple[bool, str | None]:
     try:
         conn = sqlite3.connect(db_path)
         try:
@@ -87,24 +90,19 @@ def _needs_rebuild(db_path: Path) -> bool:
         finally:
             conn.close()
     except sqlite3.DatabaseError as e:
-        _warn(f"cache DB unreadable ({type(e).__name__}: {e}); will rebuild from vault")
-        return True
+        return True, f"cache DB unreadable ({type(e).__name__}: {e})"
     if row is None:
-        return False
+        return False, None
     if row[0] != SCHEMA_VERSION:
-        _warn(
-            f"cache DB schema_version={row[0]!r}, current={SCHEMA_VERSION!r}; "
-            f"will rebuild from vault"
-        )
-        return True
-    return False
+        return True, f"cache DB schema_version={row[0]!r}, current={SCHEMA_VERSION!r}"
+    return False, None
 
 
 def _warn(msg: str) -> None:
     print(f"warn: {msg}", file=sys.stderr)
 
 
-def _validate_vault(vault_dir: Path) -> None:
+def validate_vault(vault_dir: Path) -> None:
     if not (vault_dir / "logseq" / "config.edn").exists():
         raise ValueError(f"not a logseq vault (no logseq/config.edn): {vault_dir}")
 

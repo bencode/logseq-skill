@@ -72,7 +72,31 @@ The cache DB is purely derived (vault is the source of truth), so a rebuild lose
 `logseq index` will still auto-rebuild on corrupt/mismatched DB even if you don't pre-check, but you'll surprise the user with a 1.3s run instead of a 25ms incremental. Pre-checking + asking is the polite path.
 
 ### `logseq stats <vault>`
-Show index status without rebuilding. Output: JSON `{db_path, db_exists, pages, blocks, refs, db_size_bytes, last_index_ts, vault_path, schema_version}`.
+Show index status without rebuilding. Output: JSON `{db_path, db_exists, valid, pages, blocks, refs, db_size_bytes, last_index_ts, vault_path, schema_version, expected_schema_version, schema_outdated}`. On corrupt DB returns `{db_exists: true, valid: false, error: "..."}`.
+
+### `logseq search <query> <vault> [--limit N]`
+FTS5 full-text search across all blocks in the vault.
+- Default `--limit 20`
+- `<query>` is an FTS5 MATCH expression: bare word, `"exact phrase"`, `term1 AND term2`, `term1 OR term2`, `prefix*`
+- CJK is tokenized per-codepoint (unicode61 limitation); phrase search across CJK characters works but single-word lookup is approximate
+- Output: JSON array `[{page, uuid, content}, ...]`
+- Exit codes: 0 success (even with empty results); 3 if no index for vault; 4 if index stale
+
+### `logseq backlinks <name> <vault> [--limit N] [--case-sensitive]`
+Find blocks linking to a given page (`[[name]]` references).
+- Default `--limit 50`
+- Case-insensitive by default (matches `[[Trantor]]` when querying `trantor`); pass `--case-sensitive` for exact match
+- Only page refs (`kind='page'`); block refs (`((uuid))`) not yet covered
+- Output: JSON array `[{page, uuid, content}, ...]`
+- Exit codes: same as `search`
+
+### `logseq todos <vault> [--marker M] [--page P] [--limit N]`
+List blocks with a task marker.
+- Default `--marker TODO`; common alternatives: `DOING`, `DONE`, `NOW`, `LATER`, `WAITING`, `CANCELLED`
+- Default `--limit 50`
+- Optional `--page <name>` to restrict to one page
+- Output: JSON array `[{page, uuid, content}, ...]`
+- Exit codes: same as `search`
 
 ## 3. JSON contract (output of `parse` and `journal`)
 
@@ -113,7 +137,7 @@ Notes:
 - Page references keep their original `[[brackets]]` and `((uuid))` syntax in `raw` — don't translate to markdown links when showing the user; they think in Logseq syntax
 - `parent_uuid` lets you reconstruct the tree; `sibling_order` orders children
 - Block references (`((uuid))`) point at *other blocks* — to resolve, search for a block with that `uuid` in the index (future stage) or via `find-page`-then-`parse` for a specific page
-- Backlinks are NOT a stored field — they need an index (future stage 4). For now, tell the user it's not yet supported, or grep manually
+- Backlinks are not a stored field on blocks themselves; query them via `logseq backlinks <name> <vault>` (uses the `refs` table maintained by `logseq index`)
 
 ## 4. Composition examples (not scripts — adapt to context)
 
@@ -127,17 +151,24 @@ logseq find-page 费曼 /path/to/logseq-dir
 # → take first match path, then:
 logseq parse /path/.../Feynman.md
 
-# User: "搜一下我笔记里的 X"  (no search yet)
-# Tell user search is a future feature; meanwhile fall back to:
-grep -rln 'X' /path/to/logseq-dir/{journals,pages}/
+# User: "搜一下我笔记里的 X"
+logseq stats /path/to/vault           # pre-check: index built + not stale?
+logseq search 'X' /path/to/vault      # → array of {page, uuid, content}
+
+# User: "谁链接到我的 trantor 这一页"
+logseq backlinks trantor /path/to/vault
+
+# User: "我现在有哪些 TODO"
+logseq todos /path/to/vault --limit 20
 ```
 
 ## 5. What this skill explicitly does NOT do (yet)
 
-- ❌ Full-text search command → stage 4 (`logseq search`). The FTS5 table exists and works via raw SQL on the index DB
-- ❌ Backlinks command → stage 4 (`logseq backlinks`). The `refs(target, kind)` index exists and works via raw SQL
-- ❌ Append / edit / delete blocks → stages 5-6
+- ✅ SQLite index / persistent cache → done (`logseq index` / `logseq stats`)
+- ✅ Full-text search → done (`logseq search`); CJK is per-codepoint due to unicode61 tokenizer
+- ✅ Backlinks → done (`logseq backlinks`) for page refs; block-ref backlinks (`((uuid))`) not yet
+- ✅ TODO listing → done (`logseq todos`)
+- ❌ Block-ref backlinks (who embeds / links to `((uuid))`) — stage 5+
+- ❌ Append / edit / delete blocks (writes to the vault) — stage 5-6
 - ❌ Markdown rendering → external browser component (planned)
-- ✅ SQLite index / persistent cache → stage 3 done (`logseq index` / `logseq stats`)
-
-When asked for full-text search or backlinks today, you may either tell the user the dedicated command isn't shipped, or query the index DB directly via `sqlite3 ~/.cache/logseq-skill/*.db '...'` if they accept raw SQL output. Don't fake it with unreliable greps.
+- ❌ Raw SQL escape hatch (`logseq query <sql>`) — deferred; advanced users can `sqlite3 ~/.cache/logseq-skill/<hash>.db`

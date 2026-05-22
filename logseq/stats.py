@@ -4,12 +4,12 @@ import sqlite3
 from pathlib import Path
 
 from .db import SCHEMA_VERSION, connect, count
-from .index import db_path_for, _validate_vault
+from .index import db_path_for, validate_vault
 
 
 def stats(vault_dir: Path, *, db_path: Path | None = None) -> dict:
     vault_dir = vault_dir.expanduser().resolve()
-    _validate_vault(vault_dir)
+    validate_vault(vault_dir)
     resolved_db = db_path or db_path_for(vault_dir)
     if not resolved_db.exists():
         return _empty_stats(vault_dir, resolved_db)

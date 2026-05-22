@@ -36,6 +36,24 @@ def main(argv: list[str] | None = None) -> int:
     p_stats = sub.add_parser("stats", help="Show index statistics for a vault")
     p_stats.add_argument("vault")
 
+    p_search = sub.add_parser("search", help="FTS5 full-text search across vault blocks")
+    p_search.add_argument("query", help="FTS5 query (phrases, AND/OR/NOT, prefix*)")
+    p_search.add_argument("vault")
+    p_search.add_argument("--limit", type=int, default=20)
+
+    p_back = sub.add_parser("backlinks", help="Find blocks linking to a given page")
+    p_back.add_argument("name", help="Page name (case-insensitive by default)")
+    p_back.add_argument("vault")
+    p_back.add_argument("--limit", type=int, default=50)
+    p_back.add_argument("--case-sensitive", action="store_true")
+
+    p_todos = sub.add_parser("todos", help="List blocks with a task marker")
+    p_todos.add_argument("vault")
+    p_todos.add_argument("--marker", default="TODO",
+                         help="Marker to filter (TODO/DOING/DONE/NOW/LATER/...)")
+    p_todos.add_argument("--page", default=None, help="Limit to one page name")
+    p_todos.add_argument("--limit", type=int, default=50)
+
     args = p.parse_args(argv)
 
     if args.cmd == "parse":
@@ -50,6 +68,12 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_index(args.vault, args.full)
     if args.cmd == "stats":
         return _cmd_stats(args.vault)
+    if args.cmd == "search":
+        return _cmd_search(args.query, args.vault, args.limit)
+    if args.cmd == "backlinks":
+        return _cmd_backlinks(args.name, args.vault, args.limit, args.case_sensitive)
+    if args.cmd == "todos":
+        return _cmd_todos(args.vault, args.marker, args.page, args.limit)
     return 2
 
 
@@ -143,6 +167,43 @@ def _cmd_stats(vault: str) -> int:
     except ValueError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
+    return 0
+
+
+def _cmd_search(query: str, vault: str, limit: int) -> int:
+    from .queries import search
+    return _run_query(lambda: search(Path(vault), query, limit=limit))
+
+
+def _cmd_backlinks(name: str, vault: str, limit: int, case_sensitive: bool) -> int:
+    from .queries import backlinks
+    return _run_query(
+        lambda: backlinks(
+            Path(vault), name, limit=limit, case_sensitive=case_sensitive
+        )
+    )
+
+
+def _cmd_todos(vault: str, marker: str, page: str | None, limit: int) -> int:
+    from .queries import todos
+    return _run_query(
+        lambda: todos(Path(vault), marker=marker, page=page, limit=limit)
+    )
+
+
+def _run_query(fn):
+    from .queries import IndexMissing, IndexStale
+    try:
+        _emit_json(fn())
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    except IndexMissing as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 3
+    except IndexStale as e:
+        print(f"warn: {e}", file=sys.stderr)
+        return 4
     return 0
 
 

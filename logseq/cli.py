@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from .commands import atomic, db, tui, view
+from .commands import atomic, db, view
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -68,14 +68,6 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_view.add_argument("vault", help="Logseq vault (with logseq/config.edn)")
 
-    p_tui = sub.add_parser("tui", help="Launch the Textual TUI browser")
-    p_tui.add_argument("vault", help="Logseq vault (with logseq/config.edn)")
-    p_tui.add_argument(
-        "--theme", default="textual-dark",
-        help="Initial theme name. Press T inside the TUI to live-preview "
-             "all available themes (12 built-in + logseq-black + logseq-white).",
-    )
-
     args = p.parse_args(argv)
     return _dispatch(args)
 
@@ -106,8 +98,6 @@ def _dispatch(args: argparse.Namespace) -> int:
         return db.cmd_todos(args.vault, args.marker, args.page, args.limit)
     if args.cmd == "view":
         return view.cmd_view(args.name, args.vault)
-    if args.cmd == "tui":
-        return tui.cmd_tui(args.vault, args.theme)
     return 2
 
 

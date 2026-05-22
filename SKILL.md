@@ -26,6 +26,31 @@ If exactly one matches, use it. If multiple, ask the user which. If none, ask th
 
 Remember the path within the conversation — don't re-detect for every call.
 
+## 1.2. Always link page/block results as Logseq desktop URLs
+
+When you show the user a list of pages, blocks, or search hits, **format every reference as a clickable `logseq://` URL** so the user can `Cmd+Click` in their terminal to jump straight to the visual Logseq desktop UI for that exact page or block. The user has confirmed: their primary visual reader is Logseq desktop; the CLI/Claude side handles search/analysis/writes, and the URL bridges the two.
+
+URL templates (`<graph>` is the basename of the vault directory, e.g. `bcd-new` for `/Users/bencode/Documents/bcd-new`):
+
+```
+logseq://graph/<graph>?page=<url-encoded-page-name>
+logseq://graph/<graph>?block-id=<block-uuid>
+```
+
+Use Python's `urllib.parse.quote` (or shell-side `python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))"`) to URL-encode page names — they often contain Chinese / spaces / `/` namespace separators.
+
+Output as markdown links. Example after a `logseq search 写作 vault`:
+
+```
+- [写作训练营](logseq://graph/bcd-new?page=%E5%86%99%E4%BD%9C%E8%AE%AD%E7%BB%83%E8%90%A5) — 职场写作和文学写作的区别
+- [年度计划](logseq://graph/bcd-new?page=%E5%B9%B4%E5%BA%A6%E8%AE%A1%E5%88%92) — 英文写作
+- [2023_02_25](logseq://graph/bcd-new?page=2023_02_25) — 整理 [[写作训练营]]
+```
+
+For block-specific results (when `search` / `backlinks` / `todos` returns a `uuid` field that's NOT an `auto:...` synthetic), use `?block-id=<uuid>` so Logseq opens directly to that block. For `auto:<hash>` uuids (parser-generated, not stored in the file), fall back to `?page=<page-name>`.
+
+This is the default render style for all listing results — only skip if the user explicitly asks for raw JSON or a different format.
+
 ## 1.5. Keep the index fresh before DB-backed queries
 
 The user usually edits in Logseq desktop while we work. Our index does
@@ -115,39 +140,9 @@ Find blocks linking to a given page (`[[name]]` references).
 - Output: JSON array `[{page, uuid, content}, ...]`
 - Exit codes: same as `search`
 
-### `logseq tui <vault> [--theme NAME]`
-Launch the Textual TUI browser (full-screen, keyboard-driven). **Default list shows non-empty pages only** (Logseq-aligned: journals hidden, press `J` to include them). Default theme `textual-dark`; 14 themes available — 12 built-ins (`monokai`, `nord`, `gruvbox`, `dracula`, `tokyo-night`, `flexoki`, `catppuccin-mocha`, `catppuccin-latte`, `solarized-light`, `textual-dark`, `textual-light`, `textual-ansi`) plus 2 custom (`logseq-black` pure-black bg, `logseq-white` pure-white bg).
-
-Bindings (vim-aligned):
-
-| key | action |
-|-----|--------|
-| `j` / `k` | line down / up |
-| `gg` / `G` | top / bottom |
-| `Ctrl+d` / `Ctrl+u` | half-page |
-| `Ctrl+f` / `Ctrl+b` | full-page |
-| `h` / `l` | focus list / view pane (when view focused: arrow keys / PgUp/PgDn / mouse wheel scroll long pages) |
-| `/` | focus filter input |
-| `?` | open FTS search modal |
-| `D` | jump to today's journal |
-| `J` | toggle journals in list |
-| mouse click `[[X]]` / `#tag` | jump to that page; if X has no `.md` file, enter a **virtual aggregator page** showing every block that references X (this is how Logseq itself treats tag-like links) |
-| mouse click `((uuid))` / `{{embed ((uuid))}}` | **zoom into that block** — view shows only the target block + descendants (Logseq-style focus), with a breadcrumb header |
-| `r` | open refs picker (keyboard-friendly list of all refs on current page; selecting a block ref also enters zoom) |
-| `z` | exit block zoom (back to full-page view) |
-| `Ctrl+O` | jump back through navigation history (vim-style); also exits zoom |
-| `c` | open capture modal — type a line, Enter to append to today's journal |
-| `t` | TODOs modal |
-| `T` | theme picker (live preview) |
-| `Ctrl+R` | refresh list |
-| `Ctrl+P` | Textual command palette |
-| `Esc` | blur filter / close modal |
-| `q` | quit |
-
 ### `logseq view <name> <vault>`
-Pretty-print a page to stdout with Rich (colored refs, tags, markers; nested block tree). Use this **whenever you want to show the user a page** — much better than dumping `parse` JSON or raw markdown.
+Pretty-print a page to stdout with Rich (colored refs, tags, markers; nested block tree). Useful when the user is at the terminal and wants a quick preview without opening Logseq desktop. **For most "show me page X" requests, prefer the `logseq://` URL approach (§1.2)** — it lands the user in the full visual UI of Logseq, which is the right tool for reading.
 - `<name>` resolves in this order: `"today"` → today's journal; `YYYY-MM-DD` → that journal; path containing `/` or ending `.md` → file directly; else page-name lookup (exact then substring).
-- Requires `pip install -e ".[tui]"` (adds `rich` dep, optional)
 - Exit codes: 0 success; 2 not a vault / bad args; 5 page not found
 
 ### Writes — use Edit tool directly, not a CLI command
@@ -232,13 +227,31 @@ logseq backlinks trantor /path/to/vault
 logseq todos /path/to/vault --limit 20
 ```
 
-## 5. What this skill explicitly does NOT do (yet)
+## 5. Scope & Non-goals
 
-- ✅ SQLite index / persistent cache → done (`logseq index` / `logseq stats`)
-- ✅ Full-text search → done (`logseq search`); CJK is per-codepoint due to unicode61 tokenizer
-- ✅ Backlinks → done (`logseq backlinks`) for page refs; block-ref backlinks (`((uuid))`) not yet
-- ✅ TODO listing → done (`logseq todos`)
-- ❌ Block-ref backlinks (who embeds / links to `((uuid))`) — stage 5+
-- ❌ Append / edit / delete blocks (writes to the vault) — stage 5-6
-- ❌ Markdown rendering → external browser component (planned)
-- ❌ Raw SQL escape hatch (`logseq query <sql>`) — deferred; advanced users can `sqlite3 ~/.cache/logseq-skill/<hash>.db`
+**This skill is the LLM-powered query layer for Logseq vaults — not a Logseq replacement.** Clear division of labor:
+
+| Task | Tool |
+|------|------|
+| Cross-vault search, backlinks, TODO aggregation, ad-hoc SQL queries | **This skill** (via Claude) |
+| Reading a page visually, editing notes, drawing whiteboards, syncing | **Logseq desktop** (open via `logseq://` URL — §1.2) |
+| Quick file-level edit (append a line, fix a typo) | **Claude's Read/Edit tools** directly on the .md file |
+
+What we DO:
+- ✅ SQLite + FTS5 index with jieba CJK tokenization (`index`, `stats`)
+- ✅ Full-text search across 1000+ files at sub-millisecond latency (`search`)
+- ✅ Page-ref backlinks (`backlinks`)
+- ✅ TODO/DOING aggregation across vault (`todos`)
+- ✅ Single-page structured parsing (`parse`, `page`, `journal`, `find-page`)
+- ✅ Terminal preview (`view`) when user doesn't want to switch apps
+- ✅ `logseq://` URL emission so Claude's findings are one Cmd+Click away from Logseq desktop's visual UI
+
+What we explicitly DON'T do (by design — Logseq desktop does these well):
+- No TUI / no terminal-side block editing UI
+- No write CLI (`capture`/`append` removed in Stage 7 — Claude uses Read+Edit; user uses Logseq desktop)
+- No markdown rendering server / browser preview
+- No sync, no whiteboard, no graph view, no editor
+
+Possible future:
+- Block-ref backlinks (who embeds `((uuid))`)
+- `logseq query <sql>` raw SQL escape hatch — currently advanced users `sqlite3 ~/.cache/logseq-skill/<hash>.db`

@@ -97,6 +97,21 @@ def test_find_page_no_match(fake_vault: Path) -> None:
     assert result.stdout == ""
 
 
+def test_index_returns_2_on_non_vault(tmp_path: Path) -> None:
+    result = run(["index", str(tmp_path)])
+    assert result.returncode == 2
+    assert "not a logseq vault" in result.stderr
+    assert "Traceback" not in result.stderr
+    assert "Traceback" not in result.stdout
+
+
+def test_stats_returns_2_on_non_vault(tmp_path: Path) -> None:
+    result = run(["stats", str(tmp_path)])
+    assert result.returncode == 2
+    assert "not a logseq vault" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
 def test_find_page_multi_dirs(tmp_path: Path) -> None:
     d1 = tmp_path / "vault1"
     d2 = tmp_path / "vault2"

@@ -52,10 +52,13 @@ Find page files by name in one or more directories (recursive `*.md` scan).
 ### `logseq index <vault> [--full]`
 Build or refresh the SQLite index for a vault (vault = directory with `logseq/config.edn`).
 - Incremental by default: only re-parses files whose mtime+size changed; drops rows for deleted files
-- `--full` wipes the DB and rebuilds from scratch
-- DB path: `~/.cache/logseq-skill/<sha1(vault_abs_path)[:16]>.db`
-- Output: JSON `{scanned, skipped, reindexed, deleted, elapsed_ms}`
-- Real-world: ~1300ms for 1100 files full / ~10ms when nothing changed
+- `--full` wipes the DB and rebuilds from scratch atomically (writes to `<db>.tmp`, swaps on success)
+- Vault path is canonicalized (`expanduser().resolve()`) — same vault via relative, absolute, symlinked, or `..`-laden spelling all hit the same DB
+- DB path: `~/.cache/logseq-skill/<sha1(canonical_vault_path)[:16]>.db`
+- Output: JSON `{scanned, skipped, reindexed, deleted, errors, elapsed_ms}`
+- `errors` counts files that failed to parse (non-UTF-8 etc.) plus blocks skipped due to cross-file `id::` duplication. Non-zero `errors` does not abort the run — surviving files/blocks are indexed
+- Exit code 2 with stderr message if `<vault>` is not a Logseq vault
+- Real-world: ~1300ms for 1100 files full / ~25ms when nothing changed
 
 ### `logseq stats <vault>`
 Show index status without rebuilding. Output: JSON `{db_path, db_exists, pages, blocks, refs, db_size_bytes, last_index_ts, vault_path, schema_version}`.

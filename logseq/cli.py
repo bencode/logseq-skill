@@ -119,12 +119,17 @@ def _cmd_find_page(name: str, dirs: list[str]) -> int:
 
 def _cmd_index(vault: str, full: bool) -> int:
     from .index import reindex
-    result = reindex(Path(vault), full=full)
+    try:
+        result = reindex(Path(vault), full=full)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
     _emit_json({
         "scanned": result.scanned,
         "skipped": result.skipped,
         "reindexed": result.reindexed,
         "deleted": result.deleted,
+        "errors": result.errors,
         "elapsed_ms": result.elapsed_ms,
     })
     return 0
@@ -132,7 +137,11 @@ def _cmd_index(vault: str, full: bool) -> int:
 
 def _cmd_stats(vault: str) -> int:
     from .index import stats
-    _emit_json(stats(Path(vault)))
+    try:
+        _emit_json(stats(Path(vault)))
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
     return 0
 
 

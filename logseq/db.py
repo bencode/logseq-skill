@@ -95,7 +95,7 @@ def insert_page(
     conn: sqlite3.Connection, page: Page, mtime: float, file_size: int
 ) -> None:
     conn.execute(
-        "INSERT OR REPLACE INTO pages "
+        "INSERT INTO pages "
         "(name, title, type, file_path, journal_day, namespace_parent, "
         " properties_json, aliases_json, mtime, file_size) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -118,7 +118,7 @@ def insert_page(
 
 def insert_block(conn: sqlite3.Connection, block: Block) -> None:
     conn.execute(
-        "INSERT OR REPLACE INTO blocks "
+        "INSERT INTO blocks "
         "(uuid, page, parent_uuid, sibling_order, depth, marker, content, "
         " properties_json, has_explicit_id, line_start, line_end) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",

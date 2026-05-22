@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from logseq.index import reindex, stats
+from logseq.index import db_path_for, reindex, stats
 
 
 @pytest.fixture
@@ -156,3 +156,115 @@ def test_stats_when_no_db(vault: Path, db_path: Path) -> None:
     s = stats(vault, db_path=db_path)
     assert s["db_exists"] is False
     assert s["pages"] == 0 and s["blocks"] == 0 and s["refs"] == 0
+
+
+def test_cross_file_uuid_collision_does_not_corrupt_fts(
+    vault: Path, db_path: Path
+) -> None:
+    same_id = "11111111-1111-1111-1111-111111111111"
+    (vault / "pages" / "A.md").write_text(
+        f"- alpha bravo\n  id:: {same_id}\n", encoding="utf-8"
+    )
+    (vault / "pages" / "B.md").write_text(
+        f"- charlie delta\n  id:: {same_id}\n", encoding="utf-8"
+    )
+    result = reindex(vault, db_path=db_path)
+    assert result.errors >= 1
+
+    conn = _connect(db_path)
+    content = conn.execute(
+        "SELECT content FROM blocks WHERE uuid=?", (same_id,)
+    ).fetchone()[0]
+    assert content == "alpha bravo"  # A.md sorts first → wins
+
+    # Regression: FTS5 MATCH must not raise on either token
+    hits_alpha = conn.execute(
+        "SELECT count(*) FROM blocks_fts WHERE blocks_fts MATCH 'alpha'"
+    ).fetchone()[0]
+    hits_charlie = conn.execute(
+        "SELECT count(*) FROM blocks_fts WHERE blocks_fts MATCH 'charlie'"
+    ).fetchone()[0]
+    assert hits_alpha == 1
+    assert hits_charlie == 0  # B.md's duplicate was skipped
+
+
+def test_canonical_paths_produce_same_db(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from logseq import index as index_module
+
+    monkeypatch.setattr(index_module, "CACHE_DIR", tmp_path / "cache")
+
+    v = tmp_path / "vault"
+    (v / "logseq").mkdir(parents=True)
+    (v / "logseq" / "config.edn").write_text("{}", encoding="utf-8")
+    (v / "pages").mkdir()
+    (v / "pages" / "A.md").write_text("- hello\n", encoding="utf-8")
+
+    r1 = reindex(v)
+    assert r1.reindexed == 1
+
+    v_with_dots = Path(str(v) + "/././.")
+    r2 = reindex(v_with_dots)
+    assert r2.reindexed == 0 and r2.skipped == 1
+
+    assert stats(v)["db_path"] == stats(v_with_dots)["db_path"]
+
+
+def test_unicode_decode_error_skips_only_bad_file(
+    vault: Path, db_path: Path
+) -> None:
+    (vault / "pages" / "Good.md").write_text(
+        "- valid content\n", encoding="utf-8"
+    )
+    (vault / "pages" / "Bad.md").write_bytes(
+        b"\xff\xfe not valid utf-8 \x80\x81"
+    )
+
+    result = reindex(vault, db_path=db_path)
+    assert result.errors == 1
+    assert result.reindexed == 1
+
+    conn = _connect(db_path)
+    pages = {row[0] for row in conn.execute("SELECT name FROM pages")}
+    assert "good" in pages
+    assert "bad" not in pages
+
+
+def test_full_rebuild_preserves_old_db_on_parse_failure(
+    vault: Path, db_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (vault / "pages" / "A.md").write_text("- alpha\n", encoding="utf-8")
+    (vault / "pages" / "B.md").write_text("- beta\n", encoding="utf-8")
+    reindex(vault, db_path=db_path)
+
+    conn = _connect(db_path)
+    pages_before = sorted(
+        row[0] for row in conn.execute("SELECT name FROM pages")
+    )
+    conn.close()
+    assert pages_before == ["a", "b"]
+
+    from logseq import index as index_module
+
+    original_parse = index_module.parse
+    calls = [0]
+
+    def flaky_parse(*args: object, **kwargs: object) -> object:
+        calls[0] += 1
+        if calls[0] >= 2:
+            raise RuntimeError("simulated parse failure")
+        return original_parse(*args, **kwargs)
+
+    monkeypatch.setattr(index_module, "parse", flaky_parse)
+
+    with pytest.raises(RuntimeError):
+        reindex(vault, db_path=db_path, full=True)
+
+    assert db_path.exists(), "live DB was destroyed by failed rebuild"
+    conn = _connect(db_path)
+    pages_after = sorted(
+        row[0] for row in conn.execute("SELECT name FROM pages")
+    )
+    conn.close()
+    assert pages_after == pages_before

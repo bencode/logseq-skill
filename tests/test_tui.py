@@ -414,6 +414,95 @@ async def test_ctrl_o_jumps_back_through_history(indexed_vault: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_jump_to_block_enters_zoom_mode(indexed_vault: Path) -> None:
+    """Block jump enters Logseq-style zoom: view shows only the target +
+    its descendants, with a breadcrumb header."""
+    import sqlite3
+    from io import StringIO
+
+    from rich.console import Console
+    from textual.widgets import Static
+
+    from logseq.index import db_path_for
+
+    app = LogseqTUI(indexed_vault)
+    async with app.run_test() as pilot:
+        await pilot.pause(0.2)
+        screen: MainScreen = app.screen  # type: ignore[assignment]
+        conn = sqlite3.connect(db_path_for(indexed_vault))
+        row = conn.execute(
+            "SELECT uuid FROM blocks WHERE page='alpha' LIMIT 1"
+        ).fetchone()
+        conn.close()
+        assert row is not None
+        uuid = row[0]
+
+        screen.action_jump_block(uuid)
+        await pilot.pause(0.2)
+        assert screen._focused_block_uuid == uuid
+
+        # Rendered view should contain the breadcrumb, not the page header
+        view = screen.query_one("#view-panel", Static)
+        console = Console(file=StringIO(), force_terminal=False, width=120)
+        console.print(view.renderable)
+        out = console.file.getvalue()
+        assert "↑ from" in out
+        assert "press z or Esc to exit zoom" in out
+
+
+@pytest.mark.asyncio
+async def test_z_exits_zoom(indexed_vault: Path) -> None:
+    import sqlite3
+
+    from logseq.index import db_path_for
+
+    app = LogseqTUI(indexed_vault)
+    async with app.run_test() as pilot:
+        await pilot.pause(0.2)
+        screen: MainScreen = app.screen  # type: ignore[assignment]
+        conn = sqlite3.connect(db_path_for(indexed_vault))
+        uuid = conn.execute(
+            "SELECT uuid FROM blocks WHERE page='alpha' LIMIT 1"
+        ).fetchone()[0]
+        conn.close()
+
+        screen.action_jump_block(uuid)
+        await pilot.pause(0.2)
+        assert screen._focused_block_uuid is not None
+
+        await pilot.press("z")
+        await pilot.pause(0.2)
+        assert screen._focused_block_uuid is None
+
+
+@pytest.mark.asyncio
+async def test_list_navigation_clears_zoom(indexed_vault: Path) -> None:
+    """j/k page navigation should naturally exit any block zoom."""
+    import sqlite3
+
+    from logseq.index import db_path_for
+
+    app = LogseqTUI(indexed_vault)
+    async with app.run_test() as pilot:
+        await pilot.pause(0.2)
+        screen: MainScreen = app.screen  # type: ignore[assignment]
+        conn = sqlite3.connect(db_path_for(indexed_vault))
+        uuid = conn.execute(
+            "SELECT uuid FROM blocks WHERE page='alpha' LIMIT 1"
+        ).fetchone()[0]
+        conn.close()
+
+        screen.action_jump_block(uuid)
+        await pilot.pause(0.2)
+        assert screen._focused_block_uuid is not None
+
+        # Move list cursor — should clear zoom
+        await pilot.press("j")
+        await pilot.pause(0.2)
+        assert screen._focused_block_uuid is None
+
+
+@pytest.mark.asyncio
 async def test_jump_to_unindexed_page_notifies(indexed_vault: Path) -> None:
     app = LogseqTUI(indexed_vault)
     async with app.run_test() as pilot:

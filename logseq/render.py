@@ -79,13 +79,60 @@ def _render_header(page: Page) -> RenderableType:
 
 
 def _render_block(block: Block, *, ref_action: RefAction | None = None) -> Text:
+    return _render_block_at_depth(block, block.depth, ref_action=ref_action)
+
+
+def _render_block_at_depth(
+    block: Block, display_depth: int, *, ref_action: RefAction | None = None
+) -> Text:
     text = Text()
-    text.append("  " * block.depth, style="dim")
+    text.append("  " * display_depth, style="dim")
     text.append("- ", style="dim")
     if block.marker:
         text.append(block.marker + " ", style=MARKER_STYLES.get(block.marker, "bold"))
     _append_with_refs(text, block.content, ref_action=ref_action)
     return text
+
+
+def render_block_subtree(
+    page: Page,
+    block_uuid: str,
+    *,
+    ref_action: RefAction | None = None,
+) -> RenderableType:
+    """Logseq-style block zoom: render only the target block + its descendants
+    (linear walk while depth > target.depth, document order). Adds a breadcrumb
+    header so users can see they're in zoom and how to exit."""
+    target_idx = next(
+        (i for i, b in enumerate(page.blocks) if b.uuid == block_uuid),
+        None,
+    )
+    if target_idx is None:
+        # Stale uuid — caller should clear focus and re-render as full page
+        return render_page(page, ref_action=ref_action)
+    target = page.blocks[target_idx]
+    subtree: list[Block] = [target]
+    for b in page.blocks[target_idx + 1:]:
+        if b.depth <= target.depth:
+            break
+        subtree.append(b)
+
+    breadcrumb = Text()
+    breadcrumb.append("↑ ", style="bold cyan")
+    breadcrumb.append("from ", style="dim")
+    breadcrumb.append(page.title, style="bold")
+    breadcrumb.append("  ·  block ", style="dim")
+    breadcrumb.append(target.uuid[:14], style="yellow dim")
+    breadcrumb.append("  ·  ", style="dim")
+    breadcrumb.append("press z or Esc to exit zoom", style="dim italic")
+
+    parts: list[RenderableType] = [breadcrumb, Rule(style="dim")]
+    base_depth = target.depth
+    for b in subtree:
+        parts.append(
+            _render_block_at_depth(b, b.depth - base_depth, ref_action=ref_action)
+        )
+    return Group(*parts)
 
 
 def _append_with_refs(

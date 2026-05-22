@@ -17,7 +17,7 @@ from textual.widgets import Footer, Header, Input, ListItem, ListView, Static
 
 from .. import queries
 from ..parser import parse
-from ..render import render_page
+from ..render import render_block_subtree, render_page
 from .data import (
     PageRef,
     list_pages,
@@ -46,6 +46,7 @@ class MainScreen(Screen):
         Binding("D", "today", "Today", show=True),
         Binding("J", "toggle_journals", "+Journals", show=True),
         Binding("r", "refs_modal", "Refs", show=True),
+        Binding("z", "exit_zoom", "Unzoom", show=True),
         Binding("ctrl+o", "back", "Back", show=True),
         # app actions
         Binding("t", "todos_modal", "TODOs", show=True),
@@ -70,6 +71,9 @@ class MainScreen(Screen):
         self._render_timer: Timer | None = None
         self._filter_timer: Timer | None = None
         self._history: list[PageRef] = []
+        # Block-zoom focus: when set, view renders only this block + descendants
+        # (Logseq-style "zoom-in"). Cleared on any page-level navigation.
+        self._focused_block_uuid: str | None = None
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
@@ -143,6 +147,8 @@ class MainScreen(Screen):
         # Find the page by filtering with current filter text
         visible = self._visible_pages()
         if 0 <= idx < len(visible):
+            # User-driven list navigation → page-level view, exit any zoom
+            self._focused_block_uuid = None
             self.current = visible[idx]
 
     def _visible_pages(self) -> list[PageRef]:
@@ -175,7 +181,7 @@ class MainScreen(Screen):
             # broken encodings (caught below)
             text = Path(new.file_path).read_text(encoding="utf-8-sig")
             page = parse(text, new.file_path)
-            view.update(render_page(page, ref_action=_ref_action))
+            view.update(self._render_for(page))
         except Exception as e:
             error_text = Text()
             error_text.append(f"error: {type(e).__name__}: {e}", style="red")
@@ -313,6 +319,7 @@ class MainScreen(Screen):
             self.notify(f"No journal for {today}", severity="warning")
             return
         self._push_history()
+        self._focused_block_uuid = None
         self.current = PageRef(
             name=path.stem.lower(),
             title=path.stem,
@@ -339,6 +346,7 @@ class MainScreen(Screen):
             self.notify(f"page not indexed: {name}", severity="warning")
             return
         self._push_history()
+        self._focused_block_uuid = None  # page-level jump → page-level view
         self.current = target
 
     def action_jump_block(self, uuid: str) -> None:
@@ -347,13 +355,41 @@ class MainScreen(Screen):
             self.notify(f"block not indexed: {uuid}", severity="warning")
             return
         self._push_history()
-        self.current = target
+        # Block-level jump → enter zoom: set uuid BEFORE current so the
+        # debounced render sees the focus when watch_current fires
+        self._focused_block_uuid = uuid
+        if self.current is not None and self.current.file_path == target.file_path:
+            # Same page — current won't change, so reactive watcher won't fire.
+            # Trigger render manually.
+            self._do_render_current()
+        else:
+            self.current = target
 
     def action_back(self) -> None:
         if not self._history:
             self.notify("no history", severity="information", timeout=1.0)
             return
+        self._focused_block_uuid = None
         self.current = self._history.pop()
+
+    def action_exit_zoom(self) -> None:
+        if self._focused_block_uuid is None:
+            return
+        self._focused_block_uuid = None
+        self._do_render_current()
+        self.notify("exited zoom", severity="information", timeout=1.0)
+
+    def _render_for(self, page):
+        """Pick the right renderer based on zoom state. If the focused uuid
+        doesn't exist in this page (stale from a prior page), clear it and
+        render as a full page."""
+        if self._focused_block_uuid is not None:
+            if any(b.uuid == self._focused_block_uuid for b in page.blocks):
+                return render_block_subtree(
+                    page, self._focused_block_uuid, ref_action=_ref_action
+                )
+            self._focused_block_uuid = None
+        return render_page(page, ref_action=_ref_action)
 
     def action_refs_modal(self) -> None:
         if self.current is None:

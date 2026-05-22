@@ -111,9 +111,11 @@ Bindings (vim-aligned):
 | `?` | open FTS search modal |
 | `D` | jump to today's journal |
 | `J` | toggle journals in list |
-| mouse click `[[X]]` / `((uuid))` / `#tag` in view | jump to that page / block / tag |
-| `r` | open refs picker (keyboard-friendly list of all refs on current page) |
-| `Ctrl+O` | jump back through navigation history (vim-style) |
+| mouse click `[[X]]` / `#tag` | jump to that page |
+| mouse click `((uuid))` / `{{embed ((uuid))}}` | **zoom into that block** — view shows only the target block + descendants (Logseq-style focus), with a breadcrumb header |
+| `r` | open refs picker (keyboard-friendly list of all refs on current page; selecting a block ref also enters zoom) |
+| `z` | exit block zoom (back to full-page view) |
+| `Ctrl+O` | jump back through navigation history (vim-style); also exits zoom |
 | `t` | TODOs modal |
 | `T` | theme picker (live preview) |
 | `Ctrl+R` | refresh list |

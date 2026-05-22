@@ -95,6 +95,12 @@ Find blocks linking to a given page (`[[name]]` references).
 - Output: JSON array `[{page, uuid, content}, ...]`
 - Exit codes: same as `search`
 
+### `logseq view <name> <vault>`
+Pretty-print a page to stdout with Rich (colored refs, tags, markers; nested block tree). Use this **whenever you want to show the user a page** — much better than dumping `parse` JSON or raw markdown.
+- `<name>` resolves in this order: `"today"` → today's journal; `YYYY-MM-DD` → that journal; path containing `/` or ending `.md` → file directly; else page-name lookup (exact then substring).
+- Requires `pip install -e ".[tui]"` (adds `rich` dep, optional)
+- Exit codes: 0 success; 2 not a vault / bad args; 5 page not found
+
 ### `logseq todos <vault> [--marker M] [--page P] [--limit N]`
 List blocks with a task marker.
 - Default `--marker TODO`; common alternatives: `DOING`, `DONE`, `NOW`, `LATER`, `WAITING`, `CANCELLED`

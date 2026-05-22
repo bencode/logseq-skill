@@ -63,6 +63,15 @@ def main(argv: list[str] | None = None) -> int:
     p_todos.add_argument("--page", default=None, help="Limit to one page name")
     p_todos.add_argument("--limit", type=int, default=50)
 
+    p_view = sub.add_parser(
+        "view", help="Pretty-render a page with Rich (colored refs, tags, markers)"
+    )
+    p_view.add_argument(
+        "name",
+        help="Page name, 'today', 'YYYY-MM-DD', or a file path",
+    )
+    p_view.add_argument("vault", help="Logseq vault (with logseq/config.edn)")
+
     args = p.parse_args(argv)
 
     if args.cmd == "parse":
@@ -88,6 +97,8 @@ def main(argv: list[str] | None = None) -> int:
         )
     if args.cmd == "todos":
         return _cmd_todos(args.vault, args.marker, args.page, args.limit)
+    if args.cmd == "view":
+        return _cmd_view(args.name, args.vault)
     return 2
 
 
@@ -224,6 +235,68 @@ def _cmd_todos(vault: str, marker: str, page: str | None, limit: int) -> int:
     return _run_query(
         lambda: todos(Path(vault), marker=marker, page=page, limit=limit)
     )
+
+
+def _cmd_view(name: str, vault: str) -> int:
+    try:
+        path = _resolve_view_target(name, Path(vault))
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    except FileNotFoundError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 5
+    from rich.console import Console
+    from .parser import parse
+    from .render import render_page
+    text = path.read_text(encoding="utf-8")
+    page = parse(text, str(path))
+    Console().print(render_page(page))
+    return 0
+
+
+def _resolve_view_target(name: str, vault: Path) -> Path:
+    from .index import validate_vault
+    validate_vault(vault)
+    if name == "today":
+        from datetime import date
+        return _journal_path_or_error(vault, date.today().isoformat())
+    if _looks_like_date(name):
+        return _journal_path_or_error(vault, name)
+    if "/" in name or name.endswith(".md"):
+        p = Path(name)
+        if not p.is_absolute():
+            p = (vault / p).resolve()
+        if not p.exists():
+            raise FileNotFoundError(f"file not found: {p}")
+        return p
+    needle = name.lower()
+    candidates: list[Path] = []
+    for sub in ("pages", "journals"):
+        d = vault / sub
+        if not d.exists():
+            continue
+        for md in d.glob("*.md"):
+            if md.stem.lower() == needle:
+                return md
+            if needle in md.stem.lower():
+                candidates.append(md)
+    if candidates:
+        return candidates[0]
+    raise FileNotFoundError(f"no page matching {name!r} in {vault}")
+
+
+def _looks_like_date(s: str) -> bool:
+    parts = s.split("-")
+    return len(parts) == 3 and all(p.isdigit() for p in parts)
+
+
+def _journal_path_or_error(vault: Path, date_iso: str) -> Path:
+    fname = "_".join(date_iso.split("-")) + ".md"
+    p = vault / "journals" / fname
+    if not p.exists():
+        raise FileNotFoundError(f"journal not found: {p}")
+    return p
 
 
 def _run_query(fn):

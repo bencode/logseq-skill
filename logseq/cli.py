@@ -1,13 +1,9 @@
 from __future__ import annotations
 
 import argparse
-import json
 import sys
-from datetime import date as _date
-from pathlib import Path
 
-from .parser import parse
-from .serializer import to_dict
+from .commands import atomic, db, tui, view
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -81,274 +77,38 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     args = p.parse_args(argv)
+    return _dispatch(args)
 
+
+def _dispatch(args: argparse.Namespace) -> int:
     if args.cmd == "parse":
-        return _cmd_parse(args.file)
+        return atomic.cmd_parse(args.file)
     if args.cmd == "page":
-        return _cmd_page(args.file)
+        return atomic.cmd_page(args.file)
     if args.cmd == "journal":
-        return _cmd_journal(args.date, args.in_dir)
+        return atomic.cmd_journal(args.date, args.in_dir)
     if args.cmd == "find-page":
-        return _cmd_find_page(args.name, args.dirs, args.non_empty)
+        return atomic.cmd_find_page(args.name, args.dirs, args.non_empty)
     if args.cmd == "index":
-        return _cmd_index(args.vault, args.full)
+        return db.cmd_index(args.vault, args.full)
     if args.cmd == "stats":
-        return _cmd_stats(args.vault)
+        return db.cmd_stats(args.vault)
     if args.cmd == "search":
-        return _cmd_search(
+        return db.cmd_search(
             args.query, args.vault, args.limit, args.snippet, args.min_len
         )
     if args.cmd == "backlinks":
-        return _cmd_backlinks(
+        return db.cmd_backlinks(
             args.name, args.vault, args.limit,
             args.case_sensitive, args.include_bare,
         )
     if args.cmd == "todos":
-        return _cmd_todos(args.vault, args.marker, args.page, args.limit)
+        return db.cmd_todos(args.vault, args.marker, args.page, args.limit)
     if args.cmd == "view":
-        return _cmd_view(args.name, args.vault)
+        return view.cmd_view(args.name, args.vault)
     if args.cmd == "tui":
-        return _cmd_tui(args.vault, args.theme)
+        return tui.cmd_tui(args.vault, args.theme)
     return 2
-
-
-def _emit_json(obj: object) -> None:
-    json.dump(obj, sys.stdout, ensure_ascii=False, indent=2)
-    sys.stdout.write("\n")
-
-
-def _cmd_parse(file: str) -> int:
-    path = Path(file)
-    text = path.read_text(encoding="utf-8")
-    page = parse(text, str(path))
-    _emit_json(to_dict(page))
-    return 0
-
-
-def _cmd_page(file: str) -> int:
-    path = Path(file)
-    text = path.read_text(encoding="utf-8")
-    page = parse(text, str(path))
-    _emit_json(to_dict(page)["page"])
-    return 0
-
-
-def _cmd_journal(date_arg: str, in_dir: str) -> int:
-    if date_arg == "today":
-        date_arg = _date.today().isoformat()
-    parts = date_arg.split("-")
-    if len(parts) != 3 or not all(p.isdigit() for p in parts):
-        print(f"invalid date (expected 'today' or YYYY-MM-DD): {date_arg}", file=sys.stderr)
-        return 2
-    fname = "_".join(parts) + ".md"
-    path = Path(in_dir) / "journals" / fname
-    if not path.exists():
-        print(f"journal not found: {path}", file=sys.stderr)
-        return 1
-    text = path.read_text(encoding="utf-8")
-    page = parse(text, str(path))
-    _emit_json(to_dict(page))
-    return 0
-
-
-def _cmd_find_page(name: str, dirs: list[str], non_empty: bool) -> int:
-    needle = name.lower()
-    exact: list[Path] = []
-    substring: list[Path] = []
-    for d in dirs:
-        root = Path(d)
-        if not root.exists():
-            print(f"directory not found: {root}", file=sys.stderr)
-            continue
-        for md in root.rglob("*.md"):
-            stem_lower = md.stem.lower()
-            if stem_lower == needle:
-                exact.append(md.resolve())
-            elif needle in stem_lower:
-                substring.append(md.resolve())
-
-    if non_empty:
-        exact = [p for p in exact if _file_has_blocks(p)]
-        substring = [p for p in substring if _file_has_blocks(p)]
-
-    for p in exact:
-        print(f"exact\t{p}")
-    if not exact:
-        for p in substring:
-            print(f"substring\t{p}")
-
-    return 0 if (exact or substring) else 1
-
-
-def _file_has_blocks(p: Path) -> bool:
-    from .parser import parse
-    try:
-        return len(parse(p.read_text(encoding="utf-8"), str(p)).blocks) > 0
-    except (UnicodeDecodeError, OSError):
-        return True  # err on the side of including; let caller decide
-
-
-def _cmd_index(vault: str, full: bool) -> int:
-    from .index import reindex
-    try:
-        result = reindex(Path(vault), full=full)
-    except ValueError as e:
-        print(f"error: {e}", file=sys.stderr)
-        return 2
-    _emit_json({
-        "scanned": result.scanned,
-        "skipped": result.skipped,
-        "reindexed": result.reindexed,
-        "deleted": result.deleted,
-        "errors": result.errors,
-        "auto_rebuilt": result.auto_rebuilt,
-        "elapsed_ms": result.elapsed_ms,
-    })
-    return 0
-
-
-def _cmd_stats(vault: str) -> int:
-    from .stats import stats
-    try:
-        _emit_json(stats(Path(vault)))
-    except ValueError as e:
-        print(f"error: {e}", file=sys.stderr)
-        return 2
-    return 0
-
-
-def _cmd_search(
-    query: str, vault: str, limit: int, snippet: bool, min_len: int
-) -> int:
-    from .queries import search
-    return _run_query(
-        lambda: search(
-            Path(vault), query, limit=limit, snippet=snippet, min_len=min_len
-        )
-    )
-
-
-def _cmd_backlinks(
-    name: str, vault: str, limit: int, case_sensitive: bool, include_bare: bool
-) -> int:
-    from .queries import backlinks
-    return _run_query(
-        lambda: backlinks(
-            Path(vault), name, limit=limit,
-            case_sensitive=case_sensitive, include_bare=include_bare,
-        )
-    )
-
-
-def _cmd_todos(vault: str, marker: str, page: str | None, limit: int) -> int:
-    from .queries import todos
-    return _run_query(
-        lambda: todos(Path(vault), marker=marker, page=page, limit=limit)
-    )
-
-
-def _cmd_tui(vault: str, theme: str) -> int:
-    try:
-        from .tui.app import run
-    except ImportError as e:
-        name = e.name or ""
-        if name.startswith("textual"):
-            print(
-                "error: TUI requires Textual >= 0.86 "
-                f"(import failed: {e})",
-                file=sys.stderr,
-            )
-        else:
-            print(
-                f"error: TUI requires `pip install -e \".[tui]\"` "
-                f"(missing: {name or e})",
-                file=sys.stderr,
-            )
-        return 2
-    return run(Path(vault), theme=theme)
-
-
-def _cmd_view(name: str, vault: str) -> int:
-    try:
-        path = _resolve_view_target(name, Path(vault))
-    except ValueError as e:
-        print(f"error: {e}", file=sys.stderr)
-        return 2
-    except FileNotFoundError as e:
-        print(f"error: {e}", file=sys.stderr)
-        return 5
-    from rich.console import Console
-    from .parser import parse
-    from .render import render_page
-    # utf-8-sig handles Windows-edited files with BOM transparently
-    text = path.read_text(encoding="utf-8-sig")
-    page = parse(text, str(path))
-    Console().print(render_page(page))
-    return 0
-
-
-def _resolve_view_target(name: str, vault: Path) -> Path:
-    from .index import validate_vault
-    validate_vault(vault)
-    if name == "today":
-        from datetime import date
-        return _journal_path_or_error(vault, date.today().isoformat())
-    if _looks_like_date(name):
-        return _journal_path_or_error(vault, name)
-    # Treat as a literal file path only if it looks like one:
-    # absolute, starts with ./ or ../, or ends in .md.
-    # NOT if it contains '/' alone — Logseq namespace pages
-    # ("Project/Frontend") would otherwise be mis-classified.
-    if name.startswith(("/", "./", "../")) or name.endswith(".md"):
-        p = Path(name)
-        if not p.is_absolute():
-            p = (vault / p).resolve()
-        if not p.exists():
-            raise FileNotFoundError(f"file not found: {p}")
-        return p
-    needle = name.lower()
-    candidates: list[Path] = []
-    for sub in ("pages", "journals"):
-        d = vault / sub
-        if not d.exists():
-            continue
-        for md in d.glob("*.md"):
-            if md.stem.lower() == needle:
-                return md
-            if needle in md.stem.lower():
-                candidates.append(md)
-    if candidates:
-        return candidates[0]
-    raise FileNotFoundError(f"no page matching {name!r} in {vault}")
-
-
-def _looks_like_date(s: str) -> bool:
-    parts = s.split("-")
-    return len(parts) == 3 and all(p.isdigit() for p in parts)
-
-
-def _journal_path_or_error(vault: Path, date_iso: str) -> Path:
-    fname = "_".join(date_iso.split("-")) + ".md"
-    p = vault / "journals" / fname
-    if not p.exists():
-        raise FileNotFoundError(f"journal not found: {p}")
-    return p
-
-
-def _run_query(fn):
-    from .queries import IndexMissing, IndexStale
-    try:
-        _emit_json(fn())
-    except ValueError as e:
-        print(f"error: {e}", file=sys.stderr)
-        return 2
-    except IndexMissing as e:
-        print(f"error: {e}", file=sys.stderr)
-        return 3
-    except IndexStale as e:
-        print(f"warn: {e}", file=sys.stderr)
-        return 4
-    return 0
 
 
 if __name__ == "__main__":

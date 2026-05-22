@@ -150,11 +150,14 @@ Pretty-print a page to stdout with Rich (colored refs, tags, markers; nested blo
 - Requires `pip install -e ".[tui]"` (adds `rich` dep, optional)
 - Exit codes: 0 success; 2 not a vault / bad args; 5 page not found
 
-### `logseq capture <vault> <content> [--marker MARKER]`
-Append a block to today's journal in `<vault>`. Creates the journal file (`journals/YYYY_MM_DD.md`) if missing. Emits the journal path on stdout. Auto-incremental-reindex if an index already exists. Marker examples: `TODO`, `DOING`, `DONE`, `NOW`, `LATER`. **Use this when the user says "remind me to X", "I want to capture Y", or any thought that should go into today's notes**.
+### Writes — use Edit tool directly, not a CLI command
 
-### `logseq append <vault> <page> <content> [--marker MARKER]`
-Append a block to an existing page. `<page>` is a page-name (case-insensitive, found in `pages/` or `journals/`), `"today"` (today's journal), or a `.md` file path. Returns the new block's uuid on stdout. Exit code 5 if the page doesn't exist (we don't auto-create non-journal pages).
+We **deliberately have no `capture`/`append` CLI**. LLM (you, Claude) handle writes natively via the `Edit` / `Write` tools — same number of tool calls as a CLI wrapper would be, but more flexible (you can insert in the middle of a file, edit existing blocks, construct nested structures, etc.).
+
+When the user says "remind me to X" or "add Y to my notes":
+1. **For today's journal**: `Read` `<vault>/journals/YYYY_MM_DD.md` (create if missing), `Edit` to append the new bullet line, then `logseq index <vault>` to refresh the index. **Format**: `- TODO write the blog post` (tab-indent only if nested, leading newline if the existing file doesn't end with `\n`).
+2. **For an existing named page**: same pattern on `<vault>/pages/<Name>.md`.
+3. **Programmatic writes from the TUI**: the TUI's `c` capture modal uses `logseq.writer.append_to_today()` internally — that Python API is still present and corpus-certified, just not exposed as a CLI.
 
 ### `logseq todos <vault> [--marker M] [--page P] [--limit N]`
 List blocks with a task marker.

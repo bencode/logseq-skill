@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from .commands import atomic, db, tui, view, write
+from .commands import atomic, db, tui, view
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -76,27 +76,6 @@ def main(argv: list[str] | None = None) -> int:
              "all available themes (12 built-in + logseq-black + logseq-white).",
     )
 
-    p_capture = sub.add_parser(
-        "capture",
-        help="Append a block to today's journal (creates the file if missing)",
-    )
-    p_capture.add_argument("vault")
-    p_capture.add_argument("content", help="Block content (single line)")
-    p_capture.add_argument("--marker", default=None,
-                           help="Task marker: TODO / DOING / DONE / NOW / LATER / ...")
-
-    p_append = sub.add_parser(
-        "append", help="Append a block to an existing page in a vault"
-    )
-    p_append.add_argument("vault")
-    p_append.add_argument(
-        "page",
-        help="Page name (case-insensitive lookup in pages/ + journals/), "
-             "'today' for today's journal, or a file path",
-    )
-    p_append.add_argument("content", help="Block content (single line)")
-    p_append.add_argument("--marker", default=None)
-
     args = p.parse_args(argv)
     return _dispatch(args)
 
@@ -129,10 +108,6 @@ def _dispatch(args: argparse.Namespace) -> int:
         return view.cmd_view(args.name, args.vault)
     if args.cmd == "tui":
         return tui.cmd_tui(args.vault, args.theme)
-    if args.cmd == "capture":
-        return write.cmd_capture(args.vault, args.content, args.marker)
-    if args.cmd == "append":
-        return write.cmd_append(args.vault, args.page, args.content, args.marker)
     return 2
 
 
